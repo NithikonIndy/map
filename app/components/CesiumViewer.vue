@@ -24,7 +24,7 @@
             </div>
         </header>
 
-        <aside class="scene-card control-panel">
+        <aside v-if="showSidebar" class="scene-card control-panel">
             <section class="panel-section">
                 <h2>Layers</h2>
 
@@ -202,6 +202,9 @@ import {
     type SisaketVisualBookmark,
 } from "./visual-map/sisaketSceneConfig";
 
+const props = defineProps<{
+  showSidebar: boolean;
+}>();
 type DistrictVisualState = {
     amp_code: string;
     amp_th: string;
@@ -887,7 +890,7 @@ onMounted(async () => {
         viewer.scene.globe.depthTestAgainstTerrain = terrainEnabled.value;
         viewer.scene.globe.showGroundAtmosphere = true;
         viewer.scene.highDynamicRange = true;
-        viewer.scene.screenSpaceCameraController.minimumZoomDistance = 600;
+        viewer.scene.screenSpaceCameraController.minimumZoomDistance = 10;
         viewer.scene.screenSpaceCameraController.maximumZoomDistance = 1_800_000;
         viewer.scene.postProcessStages.fxaa.enabled = true;
 

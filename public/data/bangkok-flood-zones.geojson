@@ -1,0 +1,63 @@
+{
+  "type": "FeatureCollection",
+  "name": "bangkok-flood-zones",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "zoneId": "chao-phraya-phra-nakhon",
+        "label": "ริมเจ้าพระยา - พระนคร"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [100.488, 13.748],
+            [100.502, 13.748],
+            [100.502, 13.762],
+            [100.488, 13.762],
+            [100.488, 13.748]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zoneId": "thon-buri-riverside",
+        "label": "ริมเจ้าพระยา - ธนบุรี"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [100.478, 13.722],
+            [100.494, 13.722],
+            [100.494, 13.738],
+            [100.478, 13.738],
+            [100.478, 13.722]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zoneId": "yan-nawa-riverside",
+        "label": "ริมน้ำยานนาวา"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [100.508, 13.698],
+            [100.524, 13.698],
+            [100.524, 13.712],
+            [100.508, 13.712],
+            [100.508, 13.698]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -18,6 +18,7 @@ export default defineNuxtConfig({
     public: {
       cesiumIonToken: process.env.NUXT_PUBLIC_CESIUM_ION_TOKEN,
       googleMapsApiKey: process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+      bangkokPhotorealisticTilesetUrl: process.env.NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL,
     },
   },
 

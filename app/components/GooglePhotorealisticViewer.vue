@@ -4,9 +4,9 @@
 
     <header class="viewer-card viewer-header">
       <p class="eyebrow">Photorealistic Mode</p>
-      <h1 class="title">Sisaket Close-up</h1>
+      <h1 class="title">{{ viewerTitle }}</h1>
       <p class="description">
-        โหมด close-up สำหรับดูฉาก 3D แบบ photorealistic แยกจากแผนที่จังหวัดหลัก
+        {{ viewerDescription }}
       </p>
 
       <div class="status-card">
@@ -42,6 +42,18 @@ let viewer: import("cesium").Viewer | null = null;
 
 const ionToken = runtimeConfig.public.cesiumIonToken?.trim() ?? "";
 const googleMapsApiKey = runtimeConfig.public.googleMapsApiKey?.trim() ?? "";
+const customTilesetUrl = runtimeConfig.public.bangkokPhotorealisticTilesetUrl?.trim() ?? "";
+const hasCustomTilesetUrl = customTilesetUrl.length > 0;
+
+const viewerTitle = computed(() => (
+  hasCustomTilesetUrl ? "Custom Photorealistic" : "Sisaket Close-up"
+));
+
+const viewerDescription = computed(() => (
+  hasCustomTilesetUrl
+    ? "โหมดนี้โหลด custom 3D Tiles โดยตรงจาก tileset URL และบินไปยังพื้นที่ของ dataset อัตโนมัติ"
+    : "โหมด close-up สำหรับดูฉาก 3D แบบ photorealistic แยกจากแผนที่จังหวัดหลัก"
+));
 
 const statusMessage = computed(() => {
   if (errorMessage.value) {
@@ -61,56 +73,103 @@ onMounted(async () => {
 
     if (ionToken) {
       cesiumModule.Ion.defaultAccessToken = ionToken;
-    } else {
+    } else if (!hasCustomTilesetUrl) {
       warningMessage.value = "ยังไม่ได้ตั้งค่า Cesium ion token; Google geocoder อาจใช้งานได้ไม่ครบ";
     }
 
-    if (!googleMapsApiKey) {
-      errorMessage.value = "ยังไม่ได้ตั้งค่า NUXT_PUBLIC_GOOGLE_MAPS_API_KEY";
-      return;
+    if (hasCustomTilesetUrl) {
+      viewer = new cesiumModule.Viewer(container.value, {
+        timeline: false,
+        animation: false,
+        sceneModePicker: false,
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        navigationHelpButton: false,
+        fullscreenButton: false,
+        infoBox: false,
+        selectionIndicator: false,
+        baseLayer: cesiumModule.ImageryLayer.fromProviderAsync(
+          cesiumModule.ArcGisMapServerImageryProvider.fromUrl(
+            "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+          ),
+        ),
+      });
+
+      const { scene } = viewer;
+      scene.highDynamicRange = true;
+      scene.fog.enabled = false;
+      scene.postProcessStages.fxaa.enabled = true;
+      scene.globe.showGroundAtmosphere = true;
+      scene.screenSpaceCameraController.minimumZoomDistance = 1;
+      scene.screenSpaceCameraController.maximumZoomDistance = 2_500_000;
+
+      baseStatusMessage.value = "กำลังโหลด custom photorealistic 3D Tiles...";
+
+      const tileset = await cesiumModule.Cesium3DTileset.fromUrl(customTilesetUrl);
+      tileset.maximumScreenSpaceError = 1;
+      tileset.dynamicScreenSpaceError = true;
+      scene.primitives.add(tileset);
+
+      await viewer.flyTo(tileset, {
+        duration: 2.4,
+        offset: new cesiumModule.HeadingPitchRange(
+          cesiumModule.Math.toRadians(24),
+          cesiumModule.Math.toRadians(-34),
+          0,
+        ),
+      });
+
+      baseStatusMessage.value = "Custom photorealistic 3D Tiles พร้อมใช้งานแล้ว";
+      warningMessage.value = "กำลังแสดง dataset ตามตำแหน่งจริงของ tileset ไม่ได้ยึดกล้องไว้ที่ศรีสะเกษหรือกรุงเทพ";
+    } else {
+      if (!googleMapsApiKey) {
+        errorMessage.value = "ยังไม่ได้ตั้งค่า NUXT_PUBLIC_GOOGLE_MAPS_API_KEY หรือ custom tileset URL";
+        return;
+      }
+
+      cesiumModule.GoogleMaps.defaultApiKey = googleMapsApiKey;
+
+      viewer = new cesiumModule.Viewer(container.value, {
+        globe: false,
+        baseLayer: false,
+        geocoder: cesiumModule.IonGeocodeProviderType.GOOGLE,
+        timeline: false,
+        animation: false,
+        sceneModePicker: false,
+        baseLayerPicker: false,
+        homeButton: false,
+        navigationHelpButton: false,
+        fullscreenButton: false,
+        infoBox: false,
+        selectionIndicator: false,
+      });
+
+      const { scene, camera } = viewer;
+      scene.verticalExaggeration = 1.8;
+      if (scene.skyAtmosphere) {
+        scene.skyAtmosphere.show = true;
+      }
+      scene.highDynamicRange = true;
+
+      camera.setView({
+        destination: cesiumModule.Cartesian3.fromDegrees(104.32944, 15.10694, 2200),
+        orientation: new cesiumModule.HeadingPitchRoll(
+          cesiumModule.Math.toRadians(28),
+          cesiumModule.Math.toRadians(-28),
+          0,
+        ),
+      });
+
+      baseStatusMessage.value = "กำลังโหลด Google Photorealistic 3D Tiles...";
+
+      const tileset = await cesiumModule.createGooglePhotorealistic3DTileset({
+        onlyUsingWithGoogleGeocoder: true,
+      });
+
+      scene.primitives.add(tileset);
+      baseStatusMessage.value = "Photorealistic 3D Tiles พร้อมใช้งานแล้ว";
     }
-
-    cesiumModule.GoogleMaps.defaultApiKey = googleMapsApiKey;
-
-    viewer = new cesiumModule.Viewer(container.value, {
-      globe: false,
-      baseLayer: false,
-      geocoder: cesiumModule.IonGeocodeProviderType.GOOGLE,
-      timeline: false,
-      animation: false,
-      sceneModePicker: false,
-      baseLayerPicker: false,
-      homeButton: false,
-      navigationHelpButton: false,
-      fullscreenButton: false,
-      infoBox: false,
-      selectionIndicator: false,
-    });
-
-    const { scene, camera } = viewer;
-    scene.verticalExaggeration = 1.8;
-    if (scene.skyAtmosphere) {
-      scene.skyAtmosphere.show = true;
-    }
-    scene.highDynamicRange = true;
-
-    camera.setView({
-      destination: cesiumModule.Cartesian3.fromDegrees(104.32944, 15.10694, 2200),
-      orientation: new cesiumModule.HeadingPitchRoll(
-        cesiumModule.Math.toRadians(28),
-        cesiumModule.Math.toRadians(-28),
-        0,
-      ),
-    });
-
-    baseStatusMessage.value = "กำลังโหลด Google Photorealistic 3D Tiles...";
-
-    const tileset = await cesiumModule.createGooglePhotorealistic3DTileset({
-      onlyUsingWithGoogleGeocoder: true,
-    });
-
-    scene.primitives.add(tileset);
-    baseStatusMessage.value = "Photorealistic 3D Tiles พร้อมใช้งานแล้ว";
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : String(error);
     console.error("Failed to initialize Google Photorealistic viewer", error);

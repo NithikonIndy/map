@@ -80,9 +80,9 @@ const modeDescription = computed(() => {
     case "sisaket":
       return "โหมดข้อมูลภาพรวมจังหวัด พร้อม terrain, ขอบเขตอำเภอ, OSM Buildings และ landmarks";
     case "photorealistic":
-      return "โหมด close-up แบบ photorealistic สำหรับดูมุมตึก 3D แยกจาก scene หลัก";
+      return "โหมด photorealistic ที่จะใช้ custom tileset URL ก่อน และ fallback ไป Google เมื่อไม่ได้ตั้งค่า custom source";
     default:
-      return "เดโมกรุงเทพแบบ OSM Buildings สำหรับดูเมืองหนาแน่นและมุมกล้อง 3D ใกล้ตัวตึก";
+      return "เดโมกรุงเทพบน satellite imagery พร้อม OSM Buildings, dashboard น้ำ และช่องรองรับ custom photorealistic tiles";
   }
 });
 </script>
@@ -125,7 +125,7 @@ const modeDescription = computed(() => {
 }
 
 .mode-button.is-active {
-  background: rgba(14, 165, 233, 0.28);
+  background: rgba(3, 105, 161, 0.88);
   color: #f8fafc;
   border-color: rgba(125, 211, 252, 0.42);
 }

@@ -6,7 +6,8 @@
       <p class="eyebrow">Bangkok OSM Demo</p>
       <h1 class="title">กรุงเทพมหานคร</h1>
       <p class="description">
-        เดโมกรุงเทพสำหรับดู OSM Buildings แบบเมืองหนาแน่น พร้อม mock dashboard ระดับน้ำ
+        เดโมกรุงเทพบน satellite imagery สำหรับดู OSM Buildings แบบเมืองหนาแน่น
+        พร้อมจำลองระดับน้ำตามเวลา (ช่วงฝน 10:00–12:00 น.) mock dashboard และชั้น Bangkok Custom 3D
       </p>
 
       <div class="status-row">
@@ -19,7 +20,13 @@
         <span class="chip">สถานีน้ำ {{ waterStationCount }} จุด</span>
         <span class="chip">เตือน {{ alertStationCount }} จุด</span>
         <span class="chip">{{ highestWaterChip }}</span>
+        <span class="chip">{{ terrainStatusLabel }}</span>
+        <span class="chip">{{ context3dLabel }}</span>
+        <span class="chip">{{ custom3dStatusLabel }}</span>
         <span class="chip">Layer เปิด {{ visibleLayerCount }} ชั้น</span>
+        <span class="chip" :class="{ 'chip-rain': isRainPeriodNow }">
+          {{ simulationTimeLabel }} น.
+        </span>
       </div>
     </header>
 
@@ -55,6 +62,30 @@
           <span>3D context layer (OSM Buildings)</span>
         </label>
 
+        <label class="toggle-row" :class="{ 'is-disabled': photorealisticLoading || !hasPhotorealisticSource }">
+          <input
+            v-model="layerVisibility.photorealistic"
+            type="checkbox"
+            :disabled="photorealisticLoading || !hasPhotorealisticSource"
+            @change="handleLayerToggle('photorealistic')"
+          >
+          <span>Bangkok Custom 3D</span>
+        </label>
+
+        <label
+          v-if="hasPhotorealisticSource"
+          class="toggle-row toggle-row-nested"
+          :class="{ 'is-disabled': !layerVisibility.photorealistic }"
+        >
+          <input
+            v-model="compareWithOsm"
+            type="checkbox"
+            :disabled="!layerVisibility.photorealistic"
+            @change="handleCompareModeChange"
+          >
+          <span>เปรียบเทียบกับ OSM (เปิด Custom แล้วซ่อน OSM)</span>
+        </label>
+
         <label class="toggle-row">
           <input
             v-model="layerVisibility.water"
@@ -62,6 +93,15 @@
             @change="handleLayerToggle('water')"
           >
           <span>Water markers</span>
+        </label>
+
+        <label class="toggle-row">
+          <input
+            v-model="layerVisibility.flood"
+            type="checkbox"
+            @change="handleLayerToggle('flood')"
+          >
+          <span>แผ่นน้ำท่วม (จำลอง)</span>
         </label>
 
         <p class="panel-note">
@@ -80,10 +120,62 @@
             <strong>ใจกลางเมือง</strong>
             <span>มุมเฉียง close-up ให้เห็น OSM Buildings ชัดที่สุด</span>
           </button>
+          <button
+            v-if="hasPhotorealisticSource"
+            class="bookmark-button"
+            @click="focusCustomTiles()"
+          >
+            <strong>ดู Custom 3D</strong>
+            <span>ซูมเข้า extruded buildings จาก tileset ที่ตั้งค่าไว้</span>
+          </button>
           <button class="bookmark-button" @click="focusRiverside()">
             <strong>โซนริมเจ้าพระยา</strong>
             <span>มุมเมืองติดแม่น้ำเพื่อดูมิติ skyline อีกแบบ</span>
           </button>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <h2>จำลองระดับน้ำตามเวลา</h2>
+        <p class="panel-note">
+          ช่วงฝน {{ RAIN_START_TIME }}–{{ RAIN_END_TIME }} น. — น้ำขึ้นช่วง {{ RAIN_START_TIME }}–{{ RAIN_END_TIME }}
+        </p>
+        <div class="time-display-row">
+          <strong class="time-label">{{ simulationTimeLabel }} น.</strong>
+          <span v-if="isRainPeriodNow" class="rain-badge">ฝนตก</span>
+          <span v-else class="dry-badge">ไม่มีฝน</span>
+        </div>
+        <input
+          class="time-slider"
+          type="range"
+          min="0"
+          max="1000"
+          step="1"
+          :value="Math.round(simulationProgress * 1000)"
+          @input="onSimulationSliderInput"
+        >
+        <div class="time-range-labels">
+          <span>{{ CLOCK_START_TIME }}</span>
+          <span>{{ CLOCK_STOP_TIME }}</span>
+        </div>
+        <div class="time-control-row">
+          <button class="mini-button" type="button" @click="toggleClockPlayback">
+            {{ clockPlaying ? "หยุด" : "เล่น" }}
+          </button>
+          <label class="speed-select">
+            <span>ความเร็ว</span>
+            <select v-model.number="clockMultiplier" @change="applyClockMultiplier">
+              <option :value="30">
+                30×
+              </option>
+              <option :value="60">
+                60×
+              </option>
+              <option :value="120">
+                120×
+              </option>
+            </select>
+          </label>
         </div>
       </section>
 
@@ -109,7 +201,7 @@
         <h2>Water Stations</h2>
         <ul class="station-list">
           <li
-            v-for="station in waterStationsWithDistrictNames"
+            v-for="station in waterStationsAtCurrentTime"
             :key="station.id"
             class="station-item"
             :class="{ 'is-active': activeWaterStation?.id === station.id }"
@@ -191,12 +283,14 @@
         <h2>{{ hoveredDistrict.amp_th }}</h2>
         <p class="district-subtitle">{{ hoveredDistrict.amp_en }}</p>
         <p class="panel-note">
-          คลิกเพื่อโฟกัสเขตนี้และดู OSM Buildings กับจุดน้ำใกล้เคียง
+          คลิกเพื่อโฟกัสเขตนี้และดูชั้น OSM, Custom 3D และจุดน้ำใกล้เคียง
         </p>
       </section>
 
       <p class="source-note">
-        ข้อมูลขอบเขต: OpenGISData-Thailand, ภาพพื้นหลัง: ArcGIS World Imagery, อาคาร 3D: Cesium OSM Buildings, ข้อมูลน้ำ: mock design
+        ข้อมูลขอบเขต: OpenGISData-Thailand, ภาพพื้นหลัง: ArcGIS World Imagery,
+        อาคาร 3D: Cesium OSM Buildings, Custom 3D: extruded tileset ตาม URL ที่ตั้งค่าไว้ (ไม่ใช่ Google Photorealistic),
+        ข้อมูลน้ำ: mock design
       </p>
     </aside>
   </div>
@@ -210,6 +304,22 @@ import {
   type BangkokWaterStation,
   type WaterLevelStatus,
 } from "./visual-map/bangkokWaterMock";
+import {
+  buildStationLevelProperties,
+  CLOCK_START_TIME,
+  CLOCK_STOP_TIME,
+  createFloodLevelProperty,
+  formatSimulationClockTime,
+  getLevelAtTime,
+  getSimulationProgress,
+  isRainPeriod,
+  levelToStatus,
+  progressToSimulationTime,
+  RAIN_END_TIME,
+  RAIN_START_TIME,
+  WATER_SIMULATION_DATE,
+  waterSimulationClock,
+} from "./visual-map/bangkokWaterTimeSeries";
 
 type DistrictState = {
   amp_code: string;
@@ -218,7 +328,7 @@ type DistrictState = {
   area_sqkm: number;
 };
 
-type LayerKey = "province" | "districts" | "buildings" | "water";
+type LayerKey = "province" | "districts" | "buildings" | "photorealistic" | "water" | "flood";
 
 const props = withDefaults(defineProps<{
   showSidebar?: boolean;
@@ -235,19 +345,36 @@ const selectedDistrictCode = ref<string | null>(null);
 const hoveredDistrictCode = ref<string | null>(null);
 const activeWaterStationId = ref<string | null>(null);
 const buildingsLoading = ref(false);
+const photorealisticLoading = ref(false);
 const context3dReady = ref(false);
+const photorealisticReady = ref(false);
+const compareWithOsm = ref(true);
+const clockPlaying = ref(false);
+const clockMultiplier = ref(60);
+const simulationProgress = ref(0);
+const isRainPeriodNow = ref(false);
+const simulationTime = ref(cesium.JulianDate.clone(waterSimulationClock.start));
 
 const ionToken = runtimeConfig.public.cesiumIonToken?.trim() ?? "";
+const photorealisticTilesetUrl = runtimeConfig.public.bangkokPhotorealisticTilesetUrl?.trim() ?? "";
 const hasIonToken = ionToken.length > 0;
+const hasPhotorealisticSource = photorealisticTilesetUrl.length > 0;
 
 const layerVisibility = reactive({
   province: true,
   districts: true,
   buildings: hasIonToken,
+  photorealistic: hasPhotorealisticSource,
   water: true,
+  flood: true,
 });
 
 const districtStates = reactive<Record<string, DistrictState>>({});
+
+let stationLevelProperties = new Map<string, cesium.SampledProperty>();
+let floodLevelProperty: cesium.SampledProperty | null = null;
+let floodDataSource: cesium.GeoJsonDataSource | null = null;
+let clockTickRemover: (() => void) | null = null;
 
 let viewer: cesium.Viewer | null = null;
 let clickHandler: cesium.ScreenSpaceEventHandler | null = null;
@@ -255,6 +382,8 @@ let hoverHandler: cesium.ScreenSpaceEventHandler | null = null;
 let provinceDataSource: cesium.GeoJsonDataSource | null = null;
 let districtDataSource: cesium.GeoJsonDataSource | null = null;
 let osmBuildingsTileset: cesium.Cesium3DTileset | null = null;
+let photorealisticTileset: cesium.Cesium3DTileset | null = null;
+let buildingsBeforeCustomCompare: boolean | null = null;
 
 const districtEntities = new Map<string, cesium.Entity>();
 const waterStationEntities = new Map<string, cesium.Entity>();
@@ -273,23 +402,37 @@ const hoveredDistrict = computed(() => {
   return districtStates[hoveredDistrictCode.value] ?? null;
 });
 
+const simulationTimeLabel = computed(() => formatSimulationClockTime(simulationTime.value));
+
+const waterStationsAtCurrentTime = computed(() => bangkokWaterStations.map((station) => {
+  const levelProperty = stationLevelProperties.get(station.id);
+  const levelMeters = levelProperty
+    ? getLevelAtTime(levelProperty, simulationTime.value, station.levelMeters)
+    : station.levelMeters;
+
+  return {
+    ...station,
+    levelMeters,
+    status: levelToStatus(levelMeters),
+    districtName: districtStates[station.districtCode]?.amp_th ?? station.districtCode,
+    updatedAt: `${WATER_SIMULATION_DATE} ${simulationTimeLabel.value}`,
+  };
+}));
+
 const activeWaterStation = computed(() => (
   activeWaterStationId.value
-    ? bangkokWaterStations.find((station) => station.id === activeWaterStationId.value) ?? null
+    ? waterStationsAtCurrentTime.value.find((station) => station.id === activeWaterStationId.value) ?? null
     : null
 ));
 
-const waterStationsWithDistrictNames = computed(() => bangkokWaterStations.map((station) => ({
-  ...station,
-  districtName: districtStates[station.districtCode]?.amp_th ?? station.districtCode,
-})));
-
 const alertStationCount = computed(() => (
-  bangkokWaterStations.filter((station) => station.status === "warning" || station.status === "critical").length
+  waterStationsAtCurrentTime.value.filter(
+    (station) => station.status === "warning" || station.status === "critical",
+  ).length
 ));
 
 const highestWaterStation = computed(() => (
-  bangkokWaterStations.reduce<BangkokWaterStation | null>((highest, station) => {
+  waterStationsAtCurrentTime.value.reduce<BangkokWaterStation | null>((highest, station) => {
     if (!highest || station.levelMeters > highest.levelMeters) {
       return station;
     }
@@ -307,6 +450,14 @@ const highestWaterChip = computed(() => (
 const visibleLayerCount = computed(() => Object.values(layerVisibility).filter(Boolean).length);
 
 const statusMessage = computed(() => {
+  if (buildingsLoading.value && photorealisticLoading.value) {
+    return "กำลังโหลด OSM Buildings และ Bangkok Custom 3D จาก URL ที่ตั้งค่าไว้...";
+  }
+
+  if (photorealisticLoading.value) {
+    return "กำลังโหลด Bangkok Custom 3D จาก URL ที่ตั้งค่าไว้...";
+  }
+
   if (buildingsLoading.value) {
     return "กำลังโหลด OSM Buildings ของกรุงเทพ...";
   }
@@ -346,7 +497,39 @@ const context3dLabel = computed(() => {
   return "OSM Buildings ยังไม่โหลด";
 });
 
+const custom3dStatusLabel = computed(() => {
+  if (photorealisticLoading.value) {
+    return "Custom 3D กำลังโหลด";
+  }
+
+  if (photorealisticReady.value) {
+    if (!layerVisibility.photorealistic) {
+      return "Custom 3D พร้อมเปิด";
+    }
+
+    if (compareWithOsm.value) {
+      return "Custom 3D เปิดอยู่ (ดูอย่างเดียว)";
+    }
+
+    if (layerVisibility.buildings) {
+      return "Custom 3D เปิดอยู่ (ซ้อน OSM)";
+    }
+
+    return "Custom 3D เปิดอยู่";
+  }
+
+  if (!hasPhotorealisticSource) {
+    return "Custom 3D รอ URL";
+  }
+
+  return "Custom 3D พร้อมตาม URL";
+});
+
 const layerHelpText = computed(() => {
+  if (photorealisticLoading.value) {
+    return "กำลังโหลด Bangkok Custom 3D (extruded footprints จาก tileset URL) — ไม่ใช่ mesh photogrammetry แบบ Google";
+  }
+
   if (!hasIonToken) {
     return "ถ้าอยากเปิด terrain และ OSM Buildings ของกรุงเทพ ให้ตั้งค่า NUXT_PUBLIC_CESIUM_ION_TOKEN ก่อน";
   }
@@ -355,7 +538,23 @@ const layerHelpText = computed(() => {
     return "กำลังโหลด Cesium OSM Buildings เพื่อสร้างเดโมเมือง 3D ของกรุงเทพ";
   }
 
-  return "เดโมนี้เพิ่ม mock dashboard ระดับน้ำแบบ combined dashboard พร้อม marker บนแผนที่และ panel สรุปด้านข้าง";
+  if (layerVisibility.photorealistic && !hasPhotorealisticSource) {
+    return "ยังไม่ได้ตั้งค่า NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL จึงยังเปิด Bangkok Custom 3D ไม่ได้";
+  }
+
+  if (layerVisibility.photorealistic && photorealisticReady.value) {
+    if (compareWithOsm.value) {
+      return "โหมดเปรียบเทียบ: ปิด OSM อัตโนมัติเพื่อให้เห็น extruded buildings สีส้มชัด — สลับเปิด/ปิด Custom 3D เพื่อเทียบกับดาวเทียม";
+    }
+
+    if (layerVisibility.buildings) {
+      return "ซ้อนทั้งสองชั้น: OSM ถูกทำให้โปร่งและไม่มี outline เพื่อไม่บัง Custom 3D";
+    }
+
+    return "เปิด Bangkok Custom 3D อย่างเดียวบน satellite imagery";
+  }
+
+  return "เดโมนี้ใช้ satellite imagery ร่วมกับ OSM Buildings และ mock dashboard ระดับน้ำ — Custom 3D เป็น tileset extruded ที่ host เอง";
 });
 
 function clamp(value: number, min: number, max: number) {
@@ -441,7 +640,7 @@ function applyProvinceStyle() {
     );
     entity.polygon.outline = new cesium.ConstantProperty(true);
     entity.polygon.outlineColor = new cesium.ConstantProperty(
-      cesium.Color.fromCssColorString("#e2e8f0").withAlpha(0.82),
+      cesium.Color.fromCssColorString("#f8fafc").withAlpha(0.9),
     );
   }
 }
@@ -456,11 +655,11 @@ function applyDistrictStyle(code: string) {
 
   const isSelected = selectedDistrictCode.value === code;
   const isHovered = hoveredDistrictCode.value === code;
-  let fillColor = cesium.Color.fromCssColorString("#f8fafc").withAlpha(0.02);
-  let outlineColor = cesium.Color.fromCssColorString("#cbd5e1").withAlpha(0.15);
+  let fillColor = cesium.Color.fromCssColorString("#f8fafc").withAlpha(0.03);
+  let outlineColor = cesium.Color.fromCssColorString("#e2e8f0").withAlpha(0.24);
 
   if (isHovered) {
-    fillColor = cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.10);
+    fillColor = cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.12);
     outlineColor = cesium.Color.fromCssColorString("#7dd3fc").withAlpha(0.92);
   }
 
@@ -475,21 +674,110 @@ function applyDistrictStyle(code: string) {
   entity.show = layerVisibility.districts;
 }
 
-function applyOsmBuildingStyle() {
+function isOsmStackedWithCustom() {
+  return (
+    layerVisibility.photorealistic
+    && layerVisibility.buildings
+    && !compareWithOsm.value
+    && photorealisticReady.value
+  );
+}
+
+function setOsmOutlineVisible(visible: boolean) {
   if (!osmBuildingsTileset) {
+    return;
+  }
+
+  const tileset = osmBuildingsTileset as cesium.Cesium3DTileset & { showOutline?: boolean };
+  if (typeof tileset.showOutline === "boolean") {
+    tileset.showOutline = visible;
+  }
+}
+
+function applyOsmBuildingStyle(stacked = isOsmStackedWithCustom()) {
+  if (!osmBuildingsTileset) {
+    return;
+  }
+
+  osmBuildingsTileset.maximumScreenSpaceError = 1;
+  osmBuildingsTileset.dynamicScreenSpaceError = true;
+  setOsmOutlineVisible(!stacked);
+
+  if (stacked) {
+    osmBuildingsTileset.style = new cesium.Cesium3DTileStyle({
+      color: {
+        conditions: [
+          ["true", "color('#e2e8f0', 0.32)"],
+        ],
+      },
+    });
     return;
   }
 
   osmBuildingsTileset.style = new cesium.Cesium3DTileStyle({
     color: {
       conditions: [
-        ["${building} === 'commercial' || ${building} === 'office'", "color('#d7dee8', 0.98)"],
-        ["${building} === 'apartments' || ${building} === 'residential'", "color('#f8fafc', 0.98)"],
-        ["${building} === 'industrial' || ${building} === 'warehouse'", "color('#d7c4b6', 0.96)"],
-        ["true", "color('#e5e7eb', 0.97)"],
+        ["${building} === 'commercial' || ${building} === 'office'", "color('#dbeafe', 1.0)"],
+        ["${building} === 'apartments' || ${building} === 'residential'", "color('#f8fafc', 0.99)"],
+        ["${building} === 'industrial' || ${building} === 'warehouse'", "color('#d6c3b0', 0.97)"],
+        ["${building} === 'hospital' || ${building} === 'civic'", "color('#e0f2fe', 0.99)"],
+        ["true", "color('#e2e8f0', 0.98)"],
       ],
     },
   });
+}
+
+function applyCustomTilesetStyle() {
+  if (!photorealisticTileset) {
+    return;
+  }
+
+  photorealisticTileset.maximumScreenSpaceError = 0.5;
+  photorealisticTileset.dynamicScreenSpaceError = true;
+  photorealisticTileset.style = new cesium.Cesium3DTileStyle({
+    color: "color('#f59e0b', 0.92)",
+  });
+}
+
+function syncBuildingLayerPresentation() {
+  applyOsmBuildingStyle();
+  applyCustomTilesetStyle();
+}
+
+function applyCustomCompareMode() {
+  const customOn = layerVisibility.photorealistic && photorealisticReady.value;
+
+  if (compareWithOsm.value && customOn) {
+    if (buildingsBeforeCustomCompare === null) {
+      buildingsBeforeCustomCompare = layerVisibility.buildings;
+    }
+    layerVisibility.buildings = false;
+  } else if (!layerVisibility.photorealistic && buildingsBeforeCustomCompare !== null) {
+    layerVisibility.buildings = buildingsBeforeCustomCompare;
+    buildingsBeforeCustomCompare = null;
+  } else if (!compareWithOsm.value && buildingsBeforeCustomCompare !== null) {
+    layerVisibility.buildings = buildingsBeforeCustomCompare;
+    buildingsBeforeCustomCompare = null;
+  }
+
+  syncBuildingLayerPresentation();
+  syncLayerVisibility();
+}
+
+function handleCompareModeChange() {
+  applyCustomCompareMode();
+}
+
+function tuneBaseImageryLayer() {
+  if (!viewer || viewer.imageryLayers.length === 0) {
+    return;
+  }
+
+  const imageryLayer = viewer.imageryLayers.get(0);
+  imageryLayer.brightness = 1.03;
+  imageryLayer.contrast = 1.18;
+  imageryLayer.saturation = 1.06;
+  imageryLayer.gamma = 0.94;
 }
 
 function createWaterStationMarkers() {
@@ -498,13 +786,20 @@ function createWaterStationMarkers() {
   }
 
   for (const station of bangkokWaterStations) {
-    const markerColor = getWaterStatusColor(station.status);
+    const levelProperty = stationLevelProperties.get(station.id);
+
     const entity = viewer.entities.add({
       id: `water-${station.id}`,
       position: cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 35),
       point: {
         pixelSize: 14,
-        color: markerColor,
+        color: new cesium.CallbackProperty((time) => {
+          const level = levelProperty
+            ? getLevelAtTime(levelProperty, time ?? simulationTime.value, station.levelMeters)
+            : station.levelMeters;
+
+          return getWaterStatusColor(levelToStatus(level));
+        }, false),
         outlineColor: cesium.Color.WHITE.withAlpha(0.96),
         outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -515,10 +810,24 @@ function createWaterStationMarkers() {
           cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 28),
         ],
         width: 3,
-        material: markerColor.withAlpha(0.75),
+        material: new cesium.ColorMaterialProperty(
+          new cesium.CallbackProperty((time) => {
+            const level = levelProperty
+              ? getLevelAtTime(levelProperty, time ?? simulationTime.value, station.levelMeters)
+              : station.levelMeters;
+
+            return getWaterStatusColor(levelToStatus(level)).withAlpha(0.75);
+          }, false),
+        ),
       },
       label: {
-        text: `${station.label}\n${station.levelMeters.toFixed(2)} ม.`,
+        text: new cesium.CallbackProperty((time) => {
+          const level = levelProperty
+            ? getLevelAtTime(levelProperty, time ?? simulationTime.value, station.levelMeters)
+            : station.levelMeters;
+
+          return `${station.label}\n${level.toFixed(2)} ม.`;
+        }, false),
         font: "600 12px sans-serif",
         style: cesium.LabelStyle.FILL_AND_OUTLINE,
         fillColor: cesium.Color.WHITE,
@@ -533,12 +842,107 @@ function createWaterStationMarkers() {
       properties: {
         waterStationId: station.id,
         districtCode: station.districtCode,
-        waterStatus: station.status,
       },
     });
 
     entity.show = layerVisibility.water;
     waterStationEntities.set(station.id, entity);
+  }
+}
+
+function setupWaterSimulationClock() {
+  if (!viewer) {
+    return;
+  }
+
+  viewer.clock.startTime = cesium.JulianDate.clone(waterSimulationClock.start);
+  viewer.clock.stopTime = cesium.JulianDate.clone(waterSimulationClock.stop);
+  viewer.clock.currentTime = cesium.JulianDate.clone(waterSimulationClock.start);
+  viewer.clock.clockRange = cesium.ClockRange.CLAMPED;
+  viewer.clock.multiplier = clockMultiplier.value;
+  viewer.clock.shouldAnimate = clockPlaying.value;
+
+  clockTickRemover = viewer.clock.onTick.addEventListener(() => {
+    syncSimulationUiFromClock();
+  });
+
+  syncSimulationUiFromClock();
+}
+
+function syncSimulationUiFromClock() {
+  if (!viewer) {
+    return;
+  }
+
+  const time = viewer.clock.currentTime;
+  simulationTime.value = cesium.JulianDate.clone(time);
+  simulationProgress.value = getSimulationProgress(time);
+  isRainPeriodNow.value = isRainPeriod(time);
+}
+
+function toggleClockPlayback() {
+  if (!viewer) {
+    return;
+  }
+
+  clockPlaying.value = !clockPlaying.value;
+  viewer.clock.shouldAnimate = clockPlaying.value;
+}
+
+function applyClockMultiplier() {
+  if (!viewer) {
+    return;
+  }
+
+  viewer.clock.multiplier = clockMultiplier.value;
+}
+
+function onSimulationSliderInput(event: Event) {
+  if (!viewer) {
+    return;
+  }
+
+  const progress = Number((event.target as HTMLInputElement).value) / 1000;
+  simulationProgress.value = progress;
+  clockPlaying.value = false;
+  viewer.clock.shouldAnimate = false;
+  viewer.clock.currentTime = progressToSimulationTime(progress);
+  syncSimulationUiFromClock();
+}
+
+async function createFloodZones() {
+  if (!viewer || !floodLevelProperty || floodDataSource) {
+    return;
+  }
+
+  floodDataSource = await cesium.GeoJsonDataSource.load("/data/bangkok-flood-zones.geojson", {
+    clampToGround: terrainEnabled.value,
+  });
+
+  await viewer.dataSources.add(floodDataSource);
+
+  for (const entity of floodDataSource.entities.values) {
+    if (!entity.polygon) {
+      continue;
+    }
+
+    entity.polygon.height = new cesium.ConstantProperty(0);
+    entity.polygon.extrudedHeight = floodLevelProperty;
+    entity.polygon.material = new cesium.ColorMaterialProperty(
+      cesium.Color.fromCssColorString("#0ea5e9").withAlpha(0.36),
+    );
+    entity.polygon.outline = new cesium.ConstantProperty(false);
+
+    if (terrainEnabled.value) {
+      entity.polygon.heightReference = new cesium.ConstantProperty(
+        cesium.HeightReference.CLAMP_TO_GROUND,
+      );
+      entity.polygon.extrudedHeightReference = new cesium.ConstantProperty(
+        cesium.HeightReference.RELATIVE_TO_GROUND,
+      );
+    }
+
+    entity.show = layerVisibility.flood;
   }
 }
 
@@ -561,10 +965,19 @@ function syncLayerVisibility() {
     osmBuildingsTileset.show = layerVisibility.buildings;
   }
 
+  if (photorealisticTileset) {
+    photorealisticTileset.show = layerVisibility.photorealistic;
+  }
+
   for (const entity of waterStationEntities.values()) {
     entity.show = layerVisibility.water;
   }
 
+  if (floodDataSource) {
+    floodDataSource.show = layerVisibility.flood;
+  }
+
+  syncBuildingLayerPresentation();
   syncAllDistrictStyles();
 }
 
@@ -586,7 +999,7 @@ function setActiveWaterStation(id: string | null) {
   activeWaterStationId.value = id;
 }
 
-async function focusBangkokOverview(duration = 2.0) {
+async function focusBangkokOverview(duration = 2) {
   if (!viewer || !provinceDataSource) {
     return;
   }
@@ -611,10 +1024,10 @@ async function focusCityCore(duration = 2.4) {
   setSelectedDistrict(null);
   setActiveWaterStation(null);
   await viewer.camera.flyTo({
-    destination: cesium.Cartesian3.fromDegrees(100.5402, 13.7379, 4_200),
+    destination: cesium.Cartesian3.fromDegrees(100.5402, 13.7379, 3_400),
     orientation: {
-      heading: cesium.Math.toRadians(28),
-      pitch: cesium.Math.toRadians(-28),
+      heading: cesium.Math.toRadians(30),
+      pitch: cesium.Math.toRadians(-34),
       roll: 0,
     },
     duration,
@@ -629,10 +1042,51 @@ async function focusRiverside(duration = 2.4) {
   setSelectedDistrict(null);
   setActiveWaterStation(null);
   await viewer.camera.flyTo({
-    destination: cesium.Cartesian3.fromDegrees(100.5026, 13.7262, 4_600),
+    destination: cesium.Cartesian3.fromDegrees(100.5026, 13.7262, 3_900),
     orientation: {
-      heading: cesium.Math.toRadians(42),
-      pitch: cesium.Math.toRadians(-26),
+      heading: cesium.Math.toRadians(44),
+      pitch: cesium.Math.toRadians(-32),
+      roll: 0,
+    },
+    duration,
+  });
+}
+
+async function focusCustomTiles(duration = 2.4) {
+  if (!viewer || !hasPhotorealisticSource) {
+    return;
+  }
+
+  setSelectedDistrict(null);
+  setActiveWaterStation(null);
+
+  if (!layerVisibility.photorealistic) {
+    layerVisibility.photorealistic = true;
+  }
+
+  await ensurePhotorealisticLayer();
+  applyCustomCompareMode();
+
+  const cameraOffset = new cesium.HeadingPitchRange(
+    cesium.Math.toRadians(28),
+    cesium.Math.toRadians(-38),
+    1_000,
+  );
+
+  if (photorealisticTileset) {
+    await viewer.flyTo(photorealisticTileset, {
+      duration,
+      offset: cameraOffset,
+    });
+    baseStatusMessage.value = "กำลังดู Bangkok Custom 3D (extruded buildings)";
+    return;
+  }
+
+  await viewer.camera.flyTo({
+    destination: cesium.Cartesian3.fromDegrees(100.5402, 13.7379, 1_000),
+    orientation: {
+      heading: cesium.Math.toRadians(28),
+      pitch: cesium.Math.toRadians(-38),
       roll: 0,
     },
     duration,
@@ -706,7 +1160,7 @@ async function selectAndFocusDistrict(code: string) {
 function clearSelection() {
   setSelectedDistrict(null);
   setActiveWaterStation(null);
-  baseStatusMessage.value = "พร้อมสำรวจเดโมกรุงเทพ";
+  baseStatusMessage.value = "พร้อมสำรวจเดโมกรุงเทพบน satellite imagery";
   void focusBangkokOverview(1.5);
 }
 
@@ -723,10 +1177,11 @@ async function ensureContext3dLayer() {
       enableShowOutline: true,
       showOutline: true,
     });
-    applyOsmBuildingStyle();
+    applyOsmBuildingStyle(isOsmStackedWithCustom());
     osmBuildingsTileset.show = layerVisibility.buildings;
     viewer.scene.primitives.add(osmBuildingsTileset);
     context3dReady.value = true;
+    syncBuildingLayerPresentation();
   } catch (error) {
     layerVisibility.buildings = false;
     context3dReady.value = false;
@@ -736,12 +1191,107 @@ async function ensureContext3dLayer() {
   }
 }
 
+async function ensurePhotorealisticLayer() {
+  if (!viewer || photorealisticTileset || photorealisticLoading.value) {
+    return;
+  }
+
+  if (!hasPhotorealisticSource) {
+    layerVisibility.photorealistic = false;
+    baseStatusMessage.value = "ยังไม่ได้ตั้งค่า Bangkok Custom 3D tileset URL";
+    return;
+  }
+
+  photorealisticLoading.value = true;
+
+  try {
+    photorealisticTileset = await cesium.Cesium3DTileset.fromUrl(photorealisticTilesetUrl);
+    applyCustomTilesetStyle();
+    photorealisticTileset.show = layerVisibility.photorealistic;
+    viewer.scene.primitives.add(photorealisticTileset);
+    photorealisticReady.value = true;
+    applyCustomCompareMode();
+
+    if (layerVisibility.photorealistic) {
+      await viewer.zoomTo(
+        photorealisticTileset,
+        new cesium.HeadingPitchRange(
+          cesium.Math.toRadians(28),
+          cesium.Math.toRadians(-38),
+          1_200,
+        ),
+      );
+    }
+
+    baseStatusMessage.value = "เชื่อม Bangkok Custom 3D จาก tileset URL แล้ว";
+  } catch (error) {
+    layerVisibility.photorealistic = false;
+    photorealisticReady.value = false;
+    baseStatusMessage.value = "โหลด Bangkok Custom 3D ไม่สำเร็จ — ตรวจว่า tile server รันและ URL ถูกต้อง";
+    console.error("Failed to load Bangkok Custom 3D tileset", error);
+  } finally {
+    photorealisticLoading.value = false;
+  }
+}
+
 async function handleLayerToggle(layer: LayerKey) {
   if (layer === "buildings" && layerVisibility.buildings) {
     await ensureContext3dLayer();
   }
 
+  if (layer === "photorealistic") {
+    if (layerVisibility.photorealistic) {
+      await ensurePhotorealisticLayer();
+    } else if (buildingsBeforeCustomCompare !== null) {
+      layerVisibility.buildings = buildingsBeforeCustomCompare;
+      buildingsBeforeCustomCompare = null;
+    }
+    applyCustomCompareMode();
+    syncLayerVisibility();
+    return;
+  }
+
+  if (layer === "buildings") {
+    syncBuildingLayerPresentation();
+  }
+
   syncLayerVisibility();
+}
+
+function getEntityFromPickedObject(pickedObject: unknown) {
+  if (!pickedObject || typeof pickedObject !== "object" || !("id" in pickedObject)) {
+    return null;
+  }
+
+  const candidate = (pickedObject as { id?: unknown }).id;
+
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  return candidate as cesium.Entity;
+}
+
+function pickEntityAt(windowPosition: cesium.Cartesian2) {
+  if (!viewer) {
+    return null;
+  }
+
+  const directHit = getEntityFromPickedObject(viewer.scene.pick(windowPosition));
+
+  if (directHit) {
+    return directHit;
+  }
+
+  for (const pickedObject of viewer.scene.drillPick(windowPosition, 8)) {
+    const entity = getEntityFromPickedObject(pickedObject);
+
+    if (entity) {
+      return entity;
+    }
+  }
+
+  return null;
 }
 
 onMounted(async () => {
@@ -781,10 +1331,12 @@ onMounted(async () => {
     viewer.scene.globe.enableLighting = terrainEnabled.value;
     viewer.scene.globe.depthTestAgainstTerrain = terrainEnabled.value;
     viewer.scene.globe.showGroundAtmosphere = true;
+    viewer.scene.fog.enabled = false;
     viewer.scene.highDynamicRange = true;
-    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 120;
-    viewer.scene.screenSpaceCameraController.maximumZoomDistance = 1_500_000;
+    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 1;
+    viewer.scene.screenSpaceCameraController.maximumZoomDistance = 2_500_000;
     viewer.scene.postProcessStages.fxaa.enabled = true;
+    tuneBaseImageryLayer();
 
     [provinceDataSource, districtDataSource] = await Promise.all([
       cesium.GeoJsonDataSource.load("/data/bangkok-province.geojson", {
@@ -818,7 +1370,11 @@ onMounted(async () => {
       districtEntities.set(state.amp_code, entity);
     }
 
+    stationLevelProperties = buildStationLevelProperties();
+    floodLevelProperty = createFloodLevelProperty();
+    setupWaterSimulationClock();
     createWaterStationMarkers();
+    await createFloodZones();
 
     districtCount.value = districtEntities.size;
 
@@ -826,10 +1382,18 @@ onMounted(async () => {
       await ensureContext3dLayer();
     }
 
-    syncLayerVisibility();
+    if (layerVisibility.photorealistic) {
+      await ensurePhotorealisticLayer();
+    } else {
+      syncLayerVisibility();
+    }
 
-    await focusCityCore();
-    baseStatusMessage.value = "พร้อมสำรวจเดโมกรุงเทพ 3D";
+    if (layerVisibility.photorealistic && photorealisticReady.value) {
+      baseStatusMessage.value = "พร้อมดู Bangkok Custom 3D บน satellite imagery";
+    } else {
+      await focusCityCore();
+      baseStatusMessage.value = "พร้อมสำรวจเดโมกรุงเทพ 3D บน satellite imagery";
+    }
 
     clickHandler = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     clickHandler.setInputAction((movement: { position: cesium.Cartesian2 }) => {
@@ -837,10 +1401,7 @@ onMounted(async () => {
         return;
       }
 
-      const pickedObject = viewer.scene.pick(movement.position);
-      const entity = cesium.defined(pickedObject) && pickedObject.id
-        ? pickedObject.id as cesium.Entity
-        : null;
+      const entity = pickEntityAt(movement.position);
       const waterStationId = getWaterStationIdFromEntity(entity);
 
       if (waterStationId) {
@@ -865,10 +1426,7 @@ onMounted(async () => {
         return;
       }
 
-      const pickedObject = viewer.scene.pick(movement.endPosition);
-      const entity = cesium.defined(pickedObject) && pickedObject.id
-        ? pickedObject.id as cesium.Entity
-        : null;
+      const entity = pickEntityAt(movement.endPosition);
       const waterStationId = getWaterStationIdFromEntity(entity);
 
       if (waterStationId) {
@@ -892,6 +1450,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  clockTickRemover?.();
   hoverHandler?.destroy();
   clickHandler?.destroy();
   viewer?.destroy();
@@ -996,6 +1555,76 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.chip-rain {
+  background: rgba(14, 116, 144, 0.55);
+  color: #e0f2fe;
+}
+
+.time-display-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.time-label {
+  font-size: 22px;
+}
+
+.rain-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(2, 132, 199, 0.75);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dry-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(51, 65, 85, 0.75);
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.time-slider {
+  width: 100%;
+  margin-top: 12px;
+  accent-color: #38bdf8;
+}
+
+.time-range-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.time-control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.speed-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.speed-select select {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+}
+
 .panel-section + .panel-section {
   margin-top: 18px;
   padding-top: 18px;
@@ -1016,6 +1645,12 @@ onBeforeUnmount(() => {
 
 .toggle-row.is-disabled {
   opacity: 0.65;
+}
+
+.toggle-row-nested {
+  margin-top: 8px;
+  margin-left: 18px;
+  font-size: 13px;
 }
 
 .bookmark-grid {
@@ -1125,23 +1760,23 @@ onBeforeUnmount(() => {
 }
 
 .water-badge.status-normal {
-  background: rgba(34, 197, 94, 0.18);
-  color: #86efac;
+  background: rgba(21, 128, 61, 0.72);
+  color: #ffffff;
 }
 
 .water-badge.status-watch {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fcd34d;
+  background: rgba(180, 83, 9, 0.74);
+  color: #ffffff;
 }
 
 .water-badge.status-warning {
-  background: rgba(249, 115, 22, 0.18);
-  color: #fdba74;
+  background: rgba(194, 65, 12, 0.76);
+  color: #ffffff;
 }
 
 .water-badge.status-critical {
-  background: rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
+  background: rgba(185, 28, 28, 0.78);
+  color: #ffffff;
 }
 
 .district-card {
@@ -1195,8 +1830,8 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  background: rgba(2, 132, 199, 0.24);
-  color: #f8fafc;
+  background: rgba(3, 105, 161, 0.78);
+  color: #ffffff;
   cursor: pointer;
 }
 
