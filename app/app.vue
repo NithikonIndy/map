@@ -11,6 +11,13 @@
         <button @click="showSidebar = !showSidebar">
           {{ showSidebar ? "ซ่อน Sidebar" : "เปิด Sidebar" }}
         </button>
+
+        <button
+          v-if="viewerMode === 'bangkok-osm'"
+          @click="showHeaderPanel = !showHeaderPanel"
+        >
+          {{ showHeaderPanel ? "ซ่อนแผงข้อมูล" : "เปิดแผงข้อมูล" }}
+        </button>
       </div>
 
       <!-- Top Mode Switch -->
@@ -49,17 +56,17 @@
       <!-- Viewer -->
       <CesiumViewer
         v-if="viewerMode === 'sisaket'"
-        :show-sidebar="showSidebar"
+        v-model:show-sidebar="showSidebar"
       />
 
       <GooglePhotorealisticViewer
         v-else-if="viewerMode === 'photorealistic'"
-        :show-sidebar="showSidebar"
       />
 
       <BangkokOsmBuildingsViewer
         v-else
-        :show-sidebar="showSidebar"
+        v-model:show-sidebar="showSidebar"
+        v-model:show-header-panel="showHeaderPanel"
       />
     </div>
   </ClientOnly>
@@ -74,6 +81,7 @@ const viewerMode = ref<ViewerMode>("sisaket");
 
 const showModeSwitch = ref(true);
 const showSidebar = ref(true);
+const showHeaderPanel = ref(true);
 
 const modeDescription = computed(() => {
   switch (viewerMode.value) {

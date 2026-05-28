@@ -1,111 +1,205 @@
-# Nuxt Minimal Starter
+# Cesium + Nuxt (Bangkok Demo)
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+โปรเจกต์นี้เป็นเดโมแผนที่ 3D ด้วย `Nuxt 4 + Cesium` สำหรับทดลอง:
+- โหมดเมืองกรุงเทพ (OSM Buildings + Bangkok Custom 3D)
+- จำลองระดับน้ำและแผ่นน้ำท่วมตามเวลา
+- ฝนจำลอง (particle) และฝนจริงแบบ Heatmap จาก Open-Meteo
+- โหมด time-lapse เพื่อดูการเปลี่ยนแปลงตามเวลา
 
-## Setup
+---
 
-Make sure to install dependencies:
+## 1) เทคโนโลยีหลัก
+
+- `nuxt` 4
+- `vue` 3
+- `cesium` 1.x
+- `@nuxt/ui` 4 + `tailwindcss` 4 (สำหรับ UI controls)
+
+การตั้งค่า Nuxt สำคัญอยู่ที่ `nuxt.config.ts`:
+- เปิด module `@nuxt/ui`
+- โหลด CSS:
+  - `~/assets/css/main.css`
+  - `cesium/Build/Cesium/Widgets/widgets.css`
+- copy Cesium static assets ไปที่ `/cesium` ด้วย `vite-plugin-static-copy`
+
+---
+
+## 2) ติดตั้งและรัน
+
+### ติดตั้ง dependencies
 
 ```bash
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
 bun install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+### รัน dev server
 
 ```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
 bun run dev
 ```
 
-## Production
+เปิดที่ `http://localhost:3000`
 
-Build the application for production:
+### build / preview
 
 ```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
 bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
 bun run preview
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+---
 
-## Bangkok custom tiles
+## 3) Environment Variables
 
-This repository includes a starter workflow for creating a Bangkok custom 3D Tiles source that can be plugged into `NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL`.
-
-The env var name still says `PHOTOREALISTIC` for compatibility, but the viewer labels this layer **Bangkok Custom 3D**. It loads **extruded building footprints** from your tileset URL, not Google Photorealistic 3D Tiles or photogrammetry mesh.
-
-### Quick local checklist
-
-1. Generate tiles: `npm run bangkok:tiles:all` (or run fetch → prepare → generate separately).
-2. Serve tiles: `BANGKOK_TILES_PORT=8006 npm run bangkok:tiles:serve`
-3. Set in `.env`: `NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL=http://localhost:8006/tilesets/bangkok/tileset.json`
-4. Restart the Nuxt dev server (`bun run dev`).
-5. In the Bangkok viewer sidebar, enable **Bangkok Custom 3D**. With **เปรียบเทียบกับ OSM** on (default), OSM Buildings hide automatically so extruded blocks are easy to see. Use **ดู Custom 3D** in Camera Spots to zoom in.
-
-Useful commands:
+สร้างไฟล์ `.env` (ถ้ายังไม่มี) แล้วใส่ค่าตามต้องการ:
 
 ```bash
-npm run bangkok:tiles:all
-npm run bangkok:tiles:manifest
-npm run bangkok:tiles:fetch-buildings
-npm run bangkok:tiles:prepare
-npm run bangkok:tiles:generate
-npm run bangkok:tiles:serve
-npm run bangkok:tiles:verify-http
+NUXT_PUBLIC_CESIUM_ION_TOKEN=
+NUXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL=
 ```
 
-`npm run bangkok:tiles:all` will run the full pipeline in one command, including starting a temporary local server and verifying the generated tileset over HTTP.
+คำอธิบาย:
+- `NUXT_PUBLIC_CESIUM_ION_TOKEN`
+  - ใช้เปิด Cesium World Terrain และ OSM Buildings
+- `NUXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+  - สำรองสำหรับโหมด/การใช้งานที่ต้องใช้ Google API
+- `NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL`
+  - URL ของ Bangkok Custom 3D Tileset (extruded buildings)
 
-Example env value after you host the root tileset:
+---
+
+## 4) โหมดหลักในแอป
+
+ในหน้า `app/app.vue` มีตัวเลือกโหมด viewer หลัก:
+- `sisaket`
+- `photorealistic`
+- `bangkok-osm`
+
+โหมดที่พัฒนาเชิงฟีเจอร์มากที่สุดคือ `BangkokOsmBuildingsViewer.vue` ซึ่งมี:
+- Layer toggles
+- Camera spots
+- Time simulation controls
+- Water summary + water stations
+- Rain heatmap controls (Open-Meteo)
+
+---
+
+## 5) ระบบเวลาและข้อมูลน้ำ
+
+แกนเวลาหลักอยู่ที่ `app/components/visual-map/bangkokWaterTimeSeries.ts`
+
+ค่าหลัก:
+- วันที่จำลอง: `WATER_SIMULATION_DATE`
+- เวลาเริ่ม/จบ clock: `00:00` ถึง `24:00`
+- ช่วงฝน: `12:00–16:00`
+
+ระบบนี้สร้าง:
+- station level properties
+- flood level property
+- helper แปลงเวลา/คำนวณ progress
+
+### พฤติกรรมปัจจุบัน (สำคัญ)
+- ระดับน้ำทุกจุดเริ่มจาก `0`
+- flood surface เริ่มจาก `0`
+- ระดับและสถานะ marker เปลี่ยนตาม simulation
+- flood visual ถูกทำให้:
+  - จาง/เข้มตาม depth
+  - ซ่อนอัตโนมัติเมื่อ depth ต่ำกว่า threshold
+
+---
+
+## 6) ระบบฝน
+
+### 6.1 ฝนจำลอง (Particle)
+- ใช้ `bangkokRainLayer.ts`
+- เปิด/ปิดผ่าน layer `ฝนตก (จำลอง)`
+
+### 6.2 ฝนจริง (Heatmap)
+- ใช้ `bangkokRainHeatmapLayer.ts` + `openMeteoRainClient.ts`
+- ปัจจุบัน UI เป็นแบบ “เลือกวัน + เลือกชั่วโมง” (รายชั่วโมง)
+- โหลดข้อมูลวันเดียวจาก Open-Meteo แล้ว map เป็น heatmap overlay
+
+หมายเหตุ:
+- โค้ด optimize เพื่อลดค้างระหว่าง time-lapse แล้ว (fast/slow path, throttle งานหนัก)
+
+---
+
+## 7) Time-lapse และ Performance
+
+สำหรับการเล่นเร็ว (`50x+`, `100x+`, `200x+`, `500x`):
+- มีการแยกงาน tick เป็น fast/slow path
+- ลดงานที่ไม่จำเป็นต่อ frame
+- ลดความถี่ sync flood visuals
+- ลด callback ที่หนักบางส่วนของ water markers/labels
+
+ถ้ายังหน่วง:
+1. ลดความเร็ว multiplier
+2. ปิดบาง layer ที่หนัก (เช่น flood/heatmap/clouds)
+3. เช็ก hardware acceleration ของ browser
+
+---
+
+## 8) Bangkok Custom 3D Tiles Workflow
+
+โปรเจกต์มีสคริปต์สำหรับสร้าง/เสิร์ฟ Bangkok tiles:
 
 ```bash
-NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL=https://cdn.example.com/tilesets/bangkok/tileset.json
+bun run bangkok:tiles:manifest
+bun run bangkok:tiles:fetch-buildings
+bun run bangkok:tiles:prepare
+bun run bangkok:tiles:generate
+bun run bangkok:tiles:serve
+bun run bangkok:tiles:verify-http
+bun run bangkok:tiles:all
 ```
 
-See `docs/bangkok-custom-tiles.md` for the full source-data, pipeline, hosting, and frontend integration notes.
+ตัวอย่าง local flow:
+1. สร้าง tiles:
+   - `bun run bangkok:tiles:all`
+2. เสิร์ฟ tiles:
+   - `BANGKOK_TILES_PORT=8006 bun run bangkok:tiles:serve`
+3. ตั้งค่า `.env`:
+   - `NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL=http://localhost:8006/tilesets/bangkok/tileset.json`
+4. รีสตาร์ต `bun run dev`
+
+ดูรายละเอียดเพิ่มใน `docs/bangkok-custom-tiles.md`
+
+---
+
+## 9) โครงสร้างไฟล์ที่ควรรู้
+
+- `app/components/BangkokOsmBuildingsViewer.vue`
+  - orchestration หลักของ scene, layer, time, interaction
+- `app/components/visual-map/bangkokWaterTimeSeries.ts`
+  - logic simulation น้ำ/น้ำท่วม
+- `app/components/visual-map/bangkokFloodWaterSurface.ts`
+  - flood rectangle surface + sync visibility
+- `app/components/visual-map/openMeteoRainClient.ts`
+  - ดึงและจัดข้อมูลฝนจาก Open-Meteo
+- `app/components/visual-map/bangkokRainHeatmapLayer.ts`
+  - render heatmap canvas และวางเป็น Cesium imagery layer
+
+---
+
+## 10) ปัญหาที่เจอบ่อย
+
+### หา CSS ไม่เจอ (`~/assets/css/main.css`)
+- โปรเจกต์ใช้โครง `app/`
+- ต้องวางไฟล์ไว้ที่ `app/assets/css/main.css` (ไม่ใช่ root `assets/`)
+
+### เปิด OSM Buildings / Terrain ไม่ได้
+- ตรวจ `NUXT_PUBLIC_CESIUM_ION_TOKEN`
+
+### Bangkok Custom 3D ไม่ขึ้น
+- ตรวจ URL ใน `NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL`
+- ตรวจว่า tile server ตอบไฟล์ `tileset.json` ได้จริง
+
+---
+
+## 11) ข้อเสนอการพัฒนาต่อ
+
+- เพิ่ม preset performance (`quality / balanced / performance`)
+- เพิ่ม profiling panel (frame time, update cost)
+- แยก worker สำหรับคำนวณ heatmap ภายนอก main thread
+- เพิ่ม test snapshot สำหรับ timeline keyframes สำคัญ

@@ -9,8 +9,10 @@ const cesiumBuildDir = normalizePath(
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-05-25",
+  modules: ["@nuxt/ui"],
 
   css: [
+    "~/assets/css/main.css",
     "cesium/Build/Cesium/Widgets/widgets.css",
   ],
 

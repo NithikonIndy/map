@@ -2,12 +2,34 @@
   <div class="viewer-shell">
     <div ref="container" class="cesium-container" />
 
-    <header class="scene-card scene-header">
-      <p class="eyebrow">Bangkok OSM Demo</p>
+    <button
+      v-if="!showHeaderPanel"
+      type="button"
+      class="scene-header-tab"
+      aria-label="เปิดแผงข้อมูล"
+      @click="showHeaderPanel = true"
+    >
+      แผงข้อมูล
+    </button>
+
+    <header v-if="showHeaderPanel" class="scene-card scene-header">
+      <div class="scene-header-toolbar">
+        <p class="eyebrow scene-header-eyebrow">
+          Bangkok OSM Demo
+        </p>
+        <button
+          type="button"
+          class="panel-close-button"
+          aria-label="ปิดแผงข้อมูล"
+          @click="showHeaderPanel = false"
+        >
+          ปิด
+        </button>
+      </div>
       <h1 class="title">กรุงเทพมหานคร</h1>
       <p class="description">
         เดโมกรุงเทพบน satellite imagery สำหรับดู OSM Buildings แบบเมืองหนาแน่น
-        พร้อมจำลองระดับน้ำตามเวลา (ช่วงฝน 10:00–12:00 น.) mock dashboard และชั้น Bangkok Custom 3D
+        พร้อมจำลองระดับน้ำตามเวลา 24 ชม. (ฝน 12:00–16:00 น.) แสงกลางวัน–กลางคืนตามพระอาทิตย์ขึ้น/ตกจริง และชั้น Bangkok Custom 3D
       </p>
 
       <div class="status-row">
@@ -23,6 +45,7 @@
         <span class="chip">{{ terrainStatusLabel }}</span>
         <span class="chip">{{ context3dLabel }}</span>
         <span class="chip">{{ custom3dStatusLabel }}</span>
+        <span class="chip">{{ rainHeatmapStatusLabel }}</span>
         <span class="chip">Layer เปิด {{ visibleLayerCount }} ชั้น</span>
         <span class="chip" :class="{ 'chip-rain': isRainPeriodNow }">
           {{ simulationTimeLabel }} น.
@@ -104,8 +127,79 @@
           <span>แผ่นน้ำท่วม (จำลอง)</span>
         </label>
 
+        <label class="toggle-row">
+          <input
+            v-model="layerVisibility.rain"
+            type="checkbox"
+            @change="handleLayerToggle('rain')"
+          >
+          <span>ฝนตก (จำลอง)</span>
+        </label>
+
+        <label class="toggle-row">
+          <input
+            v-model="layerVisibility.rainHeatmap"
+            type="checkbox"
+            :disabled="rainHeatmapLoading"
+            @change="handleLayerToggle('rainHeatmap')"
+          >
+          <span>Rainfall Heatmap (Open-Meteo)</span>
+        </label>
+
+        <label
+          class="toggle-row toggle-row-nested"
+          :class="{ 'is-disabled': !layerVisibility.rainHeatmap || rainHeatmapLoading }"
+        >
+          <span>ความเข้ม Heatmap</span>
+          <input
+            v-model.number="rainHeatmapOpacity"
+            type="range"
+            min="0.15"
+            max="0.95"
+            step="0.01"
+            :disabled="!layerVisibility.rainHeatmap || rainHeatmapLoading"
+            @input="syncLayerVisibility"
+          >
+        </label>
+
+        <p class="panel-note">
+          ข้อมูล Real-time (Open-Meteo) แบบรายชั่วโมง
+        </p>
+
+        <div class="date-range-grid">
+          <div class="date-field">
+            <span>เลือกวันที่</span>
+            <UInput
+              id="heatmap-date"
+              v-model="selectedHeatmapDate"
+              type="date"
+              @change="handleHeatmapDateChange"
+            />
+          </div>
+          <div class="date-field">
+            <span>เลือกชั่วโมง</span>
+            <select v-model.number="selectedHeatmapHour" @change="handleHeatmapHourChange">
+              <option v-for="hour in 24" :key="hour - 1" :value="hour - 1">
+                {{ String(hour - 1).padStart(2, "0") }}:00
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <label class="toggle-row">
+          <input
+            v-model="layerVisibility.clouds"
+            type="checkbox"
+            @change="handleLayerToggle('clouds')"
+          >
+          <span>เมฆ (Cumulus)</span>
+        </label>
+
         <p class="panel-note">
           {{ layerHelpText }}
+        </p>
+        <p class="panel-note">
+          {{ rainHeatmapStatusLabel }} · {{ selectedHeatmapDate }} {{ selectedHeatmapHourLabel }} · แหล่งข้อมูล {{ rainHeatmapSourceLabel }} · ค่าสูงสุด {{ rainHeatmapMaxLabel }}
         </p>
       </section>
 
@@ -138,13 +232,17 @@
       <section class="panel-section">
         <h2>จำลองระดับน้ำตามเวลา</h2>
         <p class="panel-note">
-          ช่วงฝน {{ RAIN_START_TIME }}–{{ RAIN_END_TIME }} น. — น้ำขึ้นช่วง {{ RAIN_START_TIME }}–{{ RAIN_END_TIME }}
+          ช่วงฝน {{ RAIN_START_TIME }}–{{ RAIN_END_TIME }} น. — ฝนตกและน้ำท่วมใจกลางเมืองขึ้นอัตโนมัติ (เปิด layer ฝน/น้ำท่วม)
         </p>
         <div class="time-display-row">
           <strong class="time-label">{{ simulationTimeLabel }} น.</strong>
+          <span class="day-phase-badge">{{ dayNightPhaseLabel }}</span>
           <span v-if="isRainPeriodNow" class="rain-badge">ฝนตก</span>
           <span v-else class="dry-badge">ไม่มีฝน</span>
         </div>
+        <p class="panel-note sun-times-note">
+          พระอาทิตย์ขึ้น {{ bangkokSunTimes.sunriseLabel }} น. · ตก {{ bangkokSunTimes.sunsetLabel }} น.
+        </p>
         <input
           class="time-slider"
           type="range"
@@ -165,14 +263,17 @@
           <label class="speed-select">
             <span>ความเร็ว</span>
             <select v-model.number="clockMultiplier" @change="applyClockMultiplier">
-              <option :value="30">
-                30×
+              <option :value="50">
+                50×
               </option>
-              <option :value="60">
-                60×
+              <option :value="100">
+                100×
               </option>
-              <option :value="120">
-                120×
+              <option :value="200">
+                200×
+              </option>
+              <option :value="500">
+                500×
               </option>
             </select>
           </label>
@@ -304,6 +405,25 @@ import {
   type BangkokWaterStation,
   type WaterLevelStatus,
 } from "./visual-map/bangkokWaterMock";
+import { createBangkokCloudCollection } from "./visual-map/bangkokCloudLayer";
+import {
+  createBangkokFloodWaterSurface,
+  syncFloodWaterSurfaceVisibility,
+  type BangkokFloodWaterSurface,
+} from "./visual-map/bangkokFloodWaterSurface";
+import {
+  createBangkokRainSystem,
+  destroyBangkokRainSystem,
+  type BangkokRainSystem,
+} from "./visual-map/bangkokRainLayer";
+import { createBangkokRainHeatmapLayer, type BangkokRainHeatmapLayer } from "./visual-map/bangkokRainHeatmapLayer";
+import {
+  getBangkokSunTimes,
+  getDayNightPhaseLabel,
+  syncBangkokDayNightLighting,
+  type BangkokSunTimes,
+  type DayNightPhase,
+} from "./visual-map/bangkokSunCycle";
 import {
   buildStationLevelProperties,
   CLOCK_START_TIME,
@@ -320,6 +440,11 @@ import {
   WATER_SIMULATION_DATE,
   waterSimulationClock,
 } from "./visual-map/bangkokWaterTimeSeries";
+import {
+  fetchBangkokRainDatasetForDate,
+  getRainFrameByDateHour,
+  type OpenMeteoRainDataset,
+} from "./visual-map/openMeteoRainClient";
 
 type DistrictState = {
   amp_code: string;
@@ -328,13 +453,50 @@ type DistrictState = {
   area_sqkm: number;
 };
 
-type LayerKey = "province" | "districts" | "buildings" | "photorealistic" | "water" | "flood";
+type LayerKey =
+  | "province"
+  | "districts"
+  | "buildings"
+  | "photorealistic"
+  | "water"
+  | "flood"
+  | "rain"
+  | "rainHeatmap"
+  | "clouds";
 
 const props = withDefaults(defineProps<{
   showSidebar?: boolean;
 }>(), {
   showSidebar: true,
 });
+
+const showHeaderPanel = defineModel<boolean>("showHeaderPanel", { default: true });
+
+function formatDateBangkok(date: Date): string {
+  const bangkokMs = date.getTime() + (7 * 60 * 60 * 1000);
+  const bangkok = new Date(bangkokMs);
+  const year = bangkok.getUTCFullYear();
+  const month = String(bangkok.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(bangkok.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDefaultRealtimeDateRange(): { startDateIso: string; endDateIso: string } {
+  const now = new Date();
+  const start = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+  const end = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000));
+  return {
+    startDateIso: formatDateBangkok(start),
+    endDateIso: formatDateBangkok(end),
+  };
+}
+
+function getCurrentBangkokHour(): number {
+  const now = new Date();
+  const bangkokMs = now.getTime() + (7 * 60 * 60 * 1000);
+  const bangkok = new Date(bangkokMs);
+  return bangkok.getUTCHours();
+}
 
 const runtimeConfig = useRuntimeConfig();
 const container = ref<HTMLDivElement | null>(null);
@@ -350,10 +512,20 @@ const context3dReady = ref(false);
 const photorealisticReady = ref(false);
 const compareWithOsm = ref(true);
 const clockPlaying = ref(false);
-const clockMultiplier = ref(60);
+const clockMultiplier = ref(50);
 const simulationProgress = ref(0);
 const isRainPeriodNow = ref(false);
 const simulationTime = ref(cesium.JulianDate.clone(waterSimulationClock.start));
+const rainHeatmapOpacity = ref(0.82);
+const rainHeatmapLoading = ref(false);
+const rainHeatmapError = ref("");
+const rainHeatmapMaxLabel = ref("-");
+const rainHeatmapSourceLabel = ref("-");
+const defaultRealtimeDateRange = getDefaultRealtimeDateRange();
+const selectedHeatmapDate = ref(defaultRealtimeDateRange.endDateIso);
+const selectedHeatmapHour = ref(getCurrentBangkokHour());
+const bangkokSunTimes: BangkokSunTimes = getBangkokSunTimes(WATER_SIMULATION_DATE);
+const dayNightPhase = ref<DayNightPhase>("day");
 
 const ionToken = runtimeConfig.public.cesiumIonToken?.trim() ?? "";
 const photorealisticTilesetUrl = runtimeConfig.public.bangkokPhotorealisticTilesetUrl?.trim() ?? "";
@@ -367,9 +539,17 @@ const layerVisibility = reactive({
   photorealistic: hasPhotorealisticSource,
   water: true,
   flood: true,
+  rain: true,
+  rainHeatmap: false,
+  clouds: false,
 });
 
 const districtStates = reactive<Record<string, DistrictState>>({});
+const floodHideThreshold = 0.02;
+const floodMaxVisualDepth = 2.5;
+const TIMELAPSE_SLOW_SYNC_INTERVAL_MS = 180;
+const TIMELAPSE_FAST_MULTIPLIER_THRESHOLD = 300;
+const WATER_MARKER_SYNC_INTERVAL_MS = 220;
 
 let stationLevelProperties = new Map<string, cesium.SampledProperty>();
 let floodLevelProperty: cesium.SampledProperty | null = null;
@@ -384,6 +564,21 @@ let districtDataSource: cesium.GeoJsonDataSource | null = null;
 let osmBuildingsTileset: cesium.Cesium3DTileset | null = null;
 let photorealisticTileset: cesium.Cesium3DTileset | null = null;
 let buildingsBeforeCustomCompare: boolean | null = null;
+let cloudCollection: ReturnType<typeof createBangkokCloudCollection> | null = null;
+let rainSystem: BangkokRainSystem | null = null;
+let rainHeatmapLayer: BangkokRainHeatmapLayer | null = null;
+let rainDataset: OpenMeteoRainDataset | null = null;
+let lastRainHeatmapTimestampIso: string | null = null;
+let floodWaterSurface: BangkokFloodWaterSurface | null = null;
+let lastSlowSyncAtMs = 0;
+let lastFloodDepthBucket = -1;
+let lastFloodZoneVisible: boolean | null = null;
+let lastWaterStationVisualSyncAtMs = 0;
+let fogStateBeforeClouds: {
+  enabled: boolean;
+  density: number;
+  minimumBrightness: number;
+} | null = null;
 
 const districtEntities = new Map<string, cesium.Entity>();
 const waterStationEntities = new Map<string, cesium.Entity>();
@@ -403,6 +598,8 @@ const hoveredDistrict = computed(() => {
 });
 
 const simulationTimeLabel = computed(() => formatSimulationClockTime(simulationTime.value));
+const dayNightPhaseLabel = computed(() => getDayNightPhaseLabel(dayNightPhase.value));
+const selectedHeatmapHourLabel = computed(() => `${String(selectedHeatmapHour.value).padStart(2, "0")}:00`);
 
 const waterStationsAtCurrentTime = computed(() => bangkokWaterStations.map((station) => {
   const levelProperty = stationLevelProperties.get(station.id);
@@ -450,6 +647,14 @@ const highestWaterChip = computed(() => (
 const visibleLayerCount = computed(() => Object.values(layerVisibility).filter(Boolean).length);
 
 const statusMessage = computed(() => {
+  if (rainHeatmapLoading.value) {
+    return "กำลังโหลดชั้นฝน Open-Meteo...";
+  }
+
+  if (rainHeatmapError.value) {
+    return "โหลดชั้นฝน Open-Meteo ไม่สำเร็จ";
+  }
+
   if (buildingsLoading.value && photorealisticLoading.value) {
     return "กำลังโหลด OSM Buildings และ Bangkok Custom 3D จาก URL ที่ตั้งค่าไว้...";
   }
@@ -525,6 +730,22 @@ const custom3dStatusLabel = computed(() => {
   return "Custom 3D พร้อมตาม URL";
 });
 
+const rainHeatmapStatusLabel = computed(() => {
+  if (rainHeatmapLoading.value) {
+    return "Heatmap กำลังโหลด";
+  }
+
+  if (rainHeatmapError.value) {
+    return "Heatmap ผิดพลาด";
+  }
+
+  if (!rainHeatmapLayer) {
+    return "Heatmap รอข้อมูล";
+  }
+
+  return layerVisibility.rainHeatmap ? "Rain mode: Real-time" : "Rain mode: Real-time (ปิด layer)";
+});
+
 const layerHelpText = computed(() => {
   if (photorealisticLoading.value) {
     return "กำลังโหลด Bangkok Custom 3D (extruded footprints จาก tileset URL) — ไม่ใช่ mesh photogrammetry แบบ Google";
@@ -554,11 +775,82 @@ const layerHelpText = computed(() => {
     return "เปิด Bangkok Custom 3D อย่างเดียวบน satellite imagery";
   }
 
+  if (rainHeatmapError.value) {
+    return "ชั้นฝน Open-Meteo โหลดไม่สำเร็จ จะใช้เอฟเฟกต์ฝนจำลองต่อไปจนกว่าจะเชื่อมข้อมูลได้";
+  }
+
+  if (rainHeatmapLoading.value) {
+    return "กำลังดึงข้อมูล Open-Meteo รายชั่วโมงของวันที่เลือก";
+  }
+
   return "เดโมนี้ใช้ satellite imagery ร่วมกับ OSM Buildings และ mock dashboard ระดับน้ำ — Custom 3D เป็น tileset extruded ที่ host เอง";
 });
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getFloodDepthAtTime(time: cesium.JulianDate): number {
+  if (!floodLevelProperty) {
+    return 0;
+  }
+
+  const value = floodLevelProperty.getValue(time);
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, value);
+}
+
+function getFloodDepthBucket(time: cesium.JulianDate): number {
+  const depth = getFloodDepthAtTime(time);
+  if (depth <= floodHideThreshold) {
+    return 0;
+  }
+
+  return Math.max(1, Math.round(clamp(depth / floodMaxVisualDepth, 0, 1) * 10));
+}
+
+function getFloodZoneVisibleState(time: cesium.JulianDate): boolean {
+  return layerVisibility.flood && getFloodDepthAtTime(time) > floodHideThreshold;
+}
+
+function syncFloodZoneDepthVisibility(time: cesium.JulianDate, force = false): void {
+  if (!floodDataSource) {
+    return;
+  }
+
+  const depthBucket = getFloodDepthBucket(time);
+  const nextVisible = getFloodZoneVisibleState(time);
+  const shouldUpdateMaterial = force || lastFloodDepthBucket !== depthBucket;
+  const shouldUpdateVisibility = force || lastFloodZoneVisible !== nextVisible;
+
+  if (!shouldUpdateMaterial && !shouldUpdateVisibility) {
+    return;
+  }
+
+  const bucketAlpha = depthBucket <= 0
+    ? 0
+    : 0.12 + ((depthBucket / 10) * 0.38);
+  const bucketColor = cesium.Color.fromCssColorString("#0ea5e9").withAlpha(bucketAlpha);
+
+  for (const entity of floodDataSource.entities.values) {
+    if (!entity.polygon) {
+      continue;
+    }
+
+    if (shouldUpdateMaterial) {
+      entity.polygon.material = new cesium.ColorMaterialProperty(bucketColor);
+    }
+
+    if (shouldUpdateVisibility) {
+      entity.show = nextVisible;
+    }
+  }
+
+  lastFloodDepthBucket = depthBucket;
+  lastFloodZoneVisible = nextVisible;
 }
 
 function getPropertyValue<T>(entity: cesium.Entity, key: string): T | undefined {
@@ -622,6 +914,39 @@ function getWaterStatusColor(status: WaterLevelStatus) {
       return cesium.Color.fromCssColorString("#f59e0b");
     default:
       return cesium.Color.fromCssColorString("#22c55e");
+  }
+}
+
+function getStationLevelForTime(station: BangkokWaterStation, time: cesium.JulianDate): number {
+  const levelProperty = stationLevelProperties.get(station.id);
+  return levelProperty
+    ? getLevelAtTime(levelProperty, time, station.levelMeters)
+    : station.levelMeters;
+}
+
+function syncWaterStationVisuals(time: cesium.JulianDate, force = false): void {
+  const nowMs = Date.now();
+  const syncInterval = clockMultiplier.value >= TIMELAPSE_FAST_MULTIPLIER_THRESHOLD
+    ? WATER_MARKER_SYNC_INTERVAL_MS * 2
+    : WATER_MARKER_SYNC_INTERVAL_MS;
+
+  if (!force && nowMs - lastWaterStationVisualSyncAtMs < syncInterval) {
+    return;
+  }
+
+  lastWaterStationVisualSyncAtMs = nowMs;
+
+  for (const station of bangkokWaterStations) {
+    const entity = waterStationEntities.get(station.id);
+    if (!entity?.point || !entity.polyline || !entity.label) {
+      continue;
+    }
+
+    const level = getStationLevelForTime(station, time);
+    const statusColor = getWaterStatusColor(levelToStatus(level));
+    entity.point.color = new cesium.ConstantProperty(statusColor);
+    entity.polyline.material = new cesium.ColorMaterialProperty(statusColor.withAlpha(0.75));
+    entity.label.text = new cesium.ConstantProperty(`${station.label}\n${level.toFixed(2)} ม.`);
   }
 }
 
@@ -746,17 +1071,21 @@ function syncBuildingLayerPresentation() {
 
 function applyCustomCompareMode() {
   const customOn = layerVisibility.photorealistic && photorealisticReady.value;
+  const shouldRestoreBuildings = (
+    (!layerVisibility.photorealistic || !compareWithOsm.value)
+    && buildingsBeforeCustomCompare !== null
+  );
 
   if (compareWithOsm.value && customOn) {
     if (buildingsBeforeCustomCompare === null) {
       buildingsBeforeCustomCompare = layerVisibility.buildings;
     }
     layerVisibility.buildings = false;
-  } else if (!layerVisibility.photorealistic && buildingsBeforeCustomCompare !== null) {
-    layerVisibility.buildings = buildingsBeforeCustomCompare;
-    buildingsBeforeCustomCompare = null;
-  } else if (!compareWithOsm.value && buildingsBeforeCustomCompare !== null) {
-    layerVisibility.buildings = buildingsBeforeCustomCompare;
+  } else if (shouldRestoreBuildings) {
+    const previousBuildingsVisibility = buildingsBeforeCustomCompare;
+    if (typeof previousBuildingsVisibility === "boolean") {
+      layerVisibility.buildings = previousBuildingsVisibility;
+    }
     buildingsBeforeCustomCompare = null;
   }
 
@@ -786,20 +1115,15 @@ function createWaterStationMarkers() {
   }
 
   for (const station of bangkokWaterStations) {
-    const levelProperty = stationLevelProperties.get(station.id);
+    const initialLevel = getStationLevelForTime(station, simulationTime.value);
+    const initialStatusColor = getWaterStatusColor(levelToStatus(initialLevel));
 
     const entity = viewer.entities.add({
       id: `water-${station.id}`,
       position: cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 35),
       point: {
         pixelSize: 14,
-        color: new cesium.CallbackProperty((time) => {
-          const level = levelProperty
-            ? getLevelAtTime(levelProperty, time ?? simulationTime.value, station.levelMeters)
-            : station.levelMeters;
-
-          return getWaterStatusColor(levelToStatus(level));
-        }, false),
+        color: initialStatusColor,
         outlineColor: cesium.Color.WHITE.withAlpha(0.96),
         outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -811,23 +1135,11 @@ function createWaterStationMarkers() {
         ],
         width: 3,
         material: new cesium.ColorMaterialProperty(
-          new cesium.CallbackProperty((time) => {
-            const level = levelProperty
-              ? getLevelAtTime(levelProperty, time ?? simulationTime.value, station.levelMeters)
-              : station.levelMeters;
-
-            return getWaterStatusColor(levelToStatus(level)).withAlpha(0.75);
-          }, false),
+          initialStatusColor.withAlpha(0.75),
         ),
       },
       label: {
-        text: new cesium.CallbackProperty((time) => {
-          const level = levelProperty
-            ? getLevelAtTime(levelProperty, time ?? simulationTime.value, station.levelMeters)
-            : station.levelMeters;
-
-          return `${station.label}\n${level.toFixed(2)} ม.`;
-        }, false),
+        text: `${station.label}\n${initialLevel.toFixed(2)} ม.`,
         font: "600 12px sans-serif",
         style: cesium.LabelStyle.FILL_AND_OUTLINE,
         fillColor: cesium.Color.WHITE,
@@ -848,6 +1160,153 @@ function createWaterStationMarkers() {
     entity.show = layerVisibility.water;
     waterStationEntities.set(station.id, entity);
   }
+
+  syncWaterStationVisuals(simulationTime.value, true);
+}
+
+function setupCloudLayer() {
+  if (!viewer || cloudCollection) {
+    return;
+  }
+
+  cloudCollection = createBangkokCloudCollection();
+  cloudCollection.show = layerVisibility.clouds;
+  viewer.scene.primitives.add(cloudCollection);
+  syncCloudFog();
+}
+
+function syncCloudFog() {
+  if (!viewer) {
+    return;
+  }
+
+  const fog = viewer.scene.fog;
+
+  if (layerVisibility.clouds) {
+    if (!fogStateBeforeClouds) {
+      fogStateBeforeClouds = {
+        enabled: fog.enabled,
+        density: fog.density,
+        minimumBrightness: fog.minimumBrightness,
+      };
+    }
+
+    fog.enabled = true;
+    fog.density = 9.5e-5;
+    fog.minimumBrightness = 0.05;
+    return;
+  }
+
+  if (fogStateBeforeClouds) {
+    fog.enabled = fogStateBeforeClouds.enabled;
+    fog.density = fogStateBeforeClouds.density;
+    fog.minimumBrightness = fogStateBeforeClouds.minimumBrightness;
+    fogStateBeforeClouds = null;
+  }
+}
+
+function setupRainAndFloodEffects() {
+  if (!viewer || !floodLevelProperty) {
+    return;
+  }
+
+  if (!rainSystem) {
+    rainSystem = createBangkokRainSystem(viewer);
+  }
+
+  if (!floodWaterSurface) {
+    floodWaterSurface = createBangkokFloodWaterSurface(viewer, floodLevelProperty, {
+      hideThreshold: floodHideThreshold,
+      maxVisualDepth: floodMaxVisualDepth,
+    });
+  }
+
+  syncRainAndFloodEffects();
+}
+
+async function setupRainHeatmapLayer() {
+  if (!viewer || rainHeatmapLayer || rainHeatmapLoading.value) {
+    return;
+  }
+
+  rainHeatmapLoading.value = true;
+  rainHeatmapError.value = "";
+
+  try {
+    rainDataset = await fetchBangkokRainDatasetForDate(selectedHeatmapDate.value);
+    const initialFrame = getRainFrameByDateHour(
+      rainDataset,
+      selectedHeatmapDate.value,
+      selectedHeatmapHour.value,
+    ) ?? rainDataset.frames[0];
+
+    if (!initialFrame) {
+      throw new Error("Open-Meteo did not return any rainfall frame");
+    }
+
+    rainHeatmapLayer = await createBangkokRainHeatmapLayer(
+      viewer,
+      initialFrame.intensityGrid,
+      rainHeatmapOpacity.value,
+    );
+    rainHeatmapLayer.setVisible(layerVisibility.rainHeatmap);
+    rainHeatmapMaxLabel.value = `${initialFrame.maxPrecipitationMmPerHour.toFixed(1)} mm/h`;
+    rainHeatmapSourceLabel.value = mapRainSourceLabel(initialFrame.source);
+    lastRainHeatmapTimestampIso = initialFrame.timestampIso;
+  } catch (error) {
+    rainHeatmapError.value = "ไม่สามารถดึงข้อมูล Open-Meteo";
+    layerVisibility.rainHeatmap = false;
+    console.error("Failed to initialize Open-Meteo rain heatmap", error);
+  } finally {
+    rainHeatmapLoading.value = false;
+  }
+}
+
+function mapRainSourceLabel(source: "historical" | "current" | "forecast"): string {
+  if (source === "historical") {
+    return "ย้อนหลัง";
+  }
+
+  if (source === "current") {
+    return "ปัจจุบัน";
+  }
+
+  return "ล่วงหน้า";
+}
+
+function syncRainHeatmapToSimulation(force = false) {
+  if (!rainHeatmapLayer || !rainDataset) {
+    return;
+  }
+
+  const frame = getRainFrameByDateHour(
+    rainDataset,
+    selectedHeatmapDate.value,
+    selectedHeatmapHour.value,
+  );
+  if (!frame) {
+    return;
+  }
+
+  if (!force && lastRainHeatmapTimestampIso === frame.timestampIso) {
+    return;
+  }
+
+  rainHeatmapLayer.updateFrame(frame.intensityGrid);
+  rainHeatmapMaxLabel.value = `${frame.maxPrecipitationMmPerHour.toFixed(1)} mm/h`;
+  rainHeatmapSourceLabel.value = mapRainSourceLabel(frame.source);
+  lastRainHeatmapTimestampIso = frame.timestampIso;
+}
+
+function syncRainAndFloodEffects() {
+  const rainVisible = layerVisibility.rain && isRainPeriodNow.value;
+  rainSystem?.setVisible(rainVisible);
+  rainHeatmapLayer?.setVisible(layerVisibility.rainHeatmap);
+  rainHeatmapLayer?.setOpacity(rainHeatmapOpacity.value);
+  syncRainHeatmapToSimulation();
+  syncFloodWaterSurfaceVisibility(floodWaterSurface, layerVisibility.flood);
+  floodWaterSurface?.syncAtTime(simulationTime.value);
+  syncFloodZoneDepthVisibility(simulationTime.value);
 }
 
 function setupWaterSimulationClock() {
@@ -866,10 +1325,10 @@ function setupWaterSimulationClock() {
     syncSimulationUiFromClock();
   });
 
-  syncSimulationUiFromClock();
+  syncSimulationUiFromClock(true);
 }
 
-function syncSimulationUiFromClock() {
+function syncSimulationUiFromClock(forceSlowPath = false) {
   if (!viewer) {
     return;
   }
@@ -878,6 +1337,24 @@ function syncSimulationUiFromClock() {
   simulationTime.value = cesium.JulianDate.clone(time);
   simulationProgress.value = getSimulationProgress(time);
   isRainPeriodNow.value = isRainPeriod(time);
+
+  const nowMs = Date.now();
+  const interval = viewer.clock.multiplier >= TIMELAPSE_FAST_MULTIPLIER_THRESHOLD
+    ? TIMELAPSE_SLOW_SYNC_INTERVAL_MS * 2
+    : TIMELAPSE_SLOW_SYNC_INTERVAL_MS;
+  const shouldRunSlowPath = forceSlowPath || (nowMs - lastSlowSyncAtMs >= interval);
+
+  if (!shouldRunSlowPath) {
+    return;
+  }
+
+  lastSlowSyncAtMs = nowMs;
+  syncCloudFog();
+  dayNightPhase.value = syncBangkokDayNightLighting(viewer, time, bangkokSunTimes, {
+    cloudsLayerEnabled: layerVisibility.clouds,
+  });
+  syncWaterStationVisuals(time);
+  syncRainAndFloodEffects();
 }
 
 function toggleClockPlayback() {
@@ -907,7 +1384,7 @@ function onSimulationSliderInput(event: Event) {
   clockPlaying.value = false;
   viewer.clock.shouldAnimate = false;
   viewer.clock.currentTime = progressToSimulationTime(progress);
-  syncSimulationUiFromClock();
+  syncSimulationUiFromClock(true);
 }
 
 async function createFloodZones() {
@@ -929,7 +1406,7 @@ async function createFloodZones() {
     entity.polygon.height = new cesium.ConstantProperty(0);
     entity.polygon.extrudedHeight = floodLevelProperty;
     entity.polygon.material = new cesium.ColorMaterialProperty(
-      cesium.Color.fromCssColorString("#0ea5e9").withAlpha(0.36),
+      cesium.Color.fromCssColorString("#0ea5e9").withAlpha(0),
     );
     entity.polygon.outline = new cesium.ConstantProperty(false);
 
@@ -942,8 +1419,12 @@ async function createFloodZones() {
       );
     }
 
-    entity.show = layerVisibility.flood;
+    entity.show = false;
   }
+
+  lastFloodDepthBucket = -1;
+  lastFloodZoneVisible = null;
+  syncFloodZoneDepthVisibility(simulationTime.value, true);
 }
 
 function syncAllDistrictStyles() {
@@ -976,6 +1457,14 @@ function syncLayerVisibility() {
   if (floodDataSource) {
     floodDataSource.show = layerVisibility.flood;
   }
+
+  syncFloodWaterSurfaceVisibility(floodWaterSurface, layerVisibility.flood);
+
+  if (cloudCollection) {
+    cloudCollection.show = layerVisibility.clouds;
+  }
+
+  syncSimulationUiFromClock();
 
   syncBuildingLayerPresentation();
   syncAllDistrictStyles();
@@ -1255,7 +1744,29 @@ async function handleLayerToggle(layer: LayerKey) {
     syncBuildingLayerPresentation();
   }
 
+  if (layer === "rainHeatmap" && layerVisibility.rainHeatmap) {
+    await setupRainHeatmapLayer();
+    syncRainHeatmapToSimulation(true);
+  }
+
   syncLayerVisibility();
+}
+
+async function handleHeatmapDateChange() {
+  rainHeatmapLayer?.destroy();
+  rainHeatmapLayer = null;
+  rainDataset = null;
+  lastRainHeatmapTimestampIso = null;
+  rainHeatmapSourceLabel.value = "-";
+
+  if (layerVisibility.rainHeatmap) {
+    await setupRainHeatmapLayer();
+    syncRainHeatmapToSimulation(true);
+  }
+}
+
+function handleHeatmapHourChange() {
+  syncRainHeatmapToSimulation(true);
 }
 
 function getEntityFromPickedObject(pickedObject: unknown) {
@@ -1328,7 +1839,7 @@ onMounted(async () => {
     }
 
     viewer = new cesium.Viewer(container.value, viewerOptions);
-    viewer.scene.globe.enableLighting = terrainEnabled.value;
+    viewer.scene.globe.enableLighting = true;
     viewer.scene.globe.depthTestAgainstTerrain = terrainEnabled.value;
     viewer.scene.globe.showGroundAtmosphere = true;
     viewer.scene.fog.enabled = false;
@@ -1371,8 +1882,11 @@ onMounted(async () => {
     }
 
     stationLevelProperties = buildStationLevelProperties();
-    floodLevelProperty = createFloodLevelProperty();
+    floodLevelProperty = createFloodLevelProperty(stationLevelProperties);
     setupWaterSimulationClock();
+    setupCloudLayer();
+    setupRainAndFloodEffects();
+    await setupRainHeatmapLayer();
     createWaterStationMarkers();
     await createFloodZones();
 
@@ -1451,6 +1965,13 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clockTickRemover?.();
+  destroyBangkokRainSystem(rainSystem);
+  rainSystem = null;
+  rainHeatmapLayer?.destroy();
+  rainHeatmapLayer = null;
+  rainDataset = null;
+  floodWaterSurface?.destroy();
+  floodWaterSurface = null;
   hoverHandler?.destroy();
   clickHandler?.destroy();
   viewer?.destroy();
@@ -1479,6 +2000,29 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(10px);
 }
 
+.scene-header-tab {
+  position: absolute;
+  top: 16px;
+  left: 0;
+  z-index: 3;
+  padding: 14px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  cursor: pointer;
+}
+
+.scene-header-tab:hover {
+  background: rgba(3, 105, 161, 0.88);
+}
+
 .scene-header {
   position: absolute;
   top: 16px;
@@ -1486,6 +2030,31 @@ onBeforeUnmount(() => {
   z-index: 2;
   width: min(620px, calc(100% - 32px));
   padding: 18px;
+}
+
+.scene-header-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scene-header-eyebrow {
+  margin: 0;
+}
+
+.panel-close-button {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #dbeafe;
+  cursor: pointer;
+}
+
+.panel-close-button:hover {
+  background: rgba(51, 65, 85, 0.9);
 }
 
 .control-panel {
@@ -1571,10 +2140,24 @@ onBeforeUnmount(() => {
   font-size: 22px;
 }
 
+.day-phase-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(120, 113, 108, 0.65);
+  color: #fafaf9;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sun-times-note {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
 .rain-badge {
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(2, 132, 199, 0.75);
+  background: rgba(3, 105, 161, 0.92);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
@@ -1641,6 +2224,29 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   margin-top: 12px;
+}
+
+.toggle-row select {
+  margin-left: auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+}
+
+.date-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.date-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
 }
 
 .toggle-row.is-disabled {
@@ -1879,6 +2485,10 @@ onBeforeUnmount(() => {
   .station-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .date-range-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

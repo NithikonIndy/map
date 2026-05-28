@@ -18,12 +18,14 @@
   },
   "dependencies": {
     "@gltf-transform/core": "^4.3.0",
+    "@nuxt/ui": "^4.8.0",
     "@types/node": "^25.9.1",
     "cesium": "^1.141.0",
     "geometry-extrude": "^0.2.1",
     "nuxt": "^4.4.6",
     "stream-chain": "^4.1.1",
     "stream-json": "^3.1.0",
+    "tailwindcss": "^4.3.0",
     "unzipper": "^0.12.3",
     "vue": "^3.5.34",
     "vue-router": "^5.0.7"

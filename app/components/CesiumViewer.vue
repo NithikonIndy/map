@@ -24,7 +24,31 @@
             </div>
         </header>
 
+        <button
+            v-if="!showSidebar"
+            type="button"
+            class="control-panel-tab"
+            aria-label="เปิดแผงควบคุม"
+            @click="showSidebar = true"
+        >
+            แผงควบคุม
+        </button>
+
         <aside v-if="showSidebar" class="scene-card control-panel">
+            <div class="control-panel-toolbar">
+                <h2 class="control-panel-title">
+                    แผงควบคุม
+                </h2>
+                <button
+                    type="button"
+                    class="panel-close-button"
+                    aria-label="ปิดแผงควบคุม"
+                    @click="showSidebar = false"
+                >
+                    ปิด
+                </button>
+            </div>
+
             <section class="panel-section">
                 <h2>Layers</h2>
 
@@ -202,9 +226,7 @@ import {
     type SisaketVisualBookmark,
 } from "./visual-map/sisaketSceneConfig";
 
-const props = defineProps<{
-  showSidebar: boolean;
-}>();
+const showSidebar = defineModel<boolean>("showSidebar", { default: true });
 type DistrictVisualState = {
     amp_code: string;
     amp_th: string;
@@ -1033,6 +1055,31 @@ onBeforeUnmount(() => {
     padding: 18px;
 }
 
+.control-panel-tab {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    z-index: 3;
+    padding: 14px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-right: none;
+    border-radius: 12px 0 0 12px;
+    background: rgba(15, 23, 42, 0.92);
+    color: #f8fafc;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    cursor: pointer;
+    transform: translateY(-50%);
+    backdrop-filter: blur(10px);
+}
+
+.control-panel-tab:hover {
+    background: rgba(3, 105, 161, 0.88);
+}
+
 .control-panel {
     position: absolute;
     top: 16px;
@@ -1042,6 +1089,34 @@ onBeforeUnmount(() => {
     max-height: calc(100vh - 32px);
     overflow: auto;
     padding: 18px;
+}
+
+.control-panel-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-panel-title {
+    margin: 0;
+    font-size: 18px;
+}
+
+.panel-close-button {
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.75);
+    color: #dbeafe;
+    cursor: pointer;
+}
+
+.panel-close-button:hover {
+    background: rgba(51, 65, 85, 0.9);
 }
 
 .eyebrow {
