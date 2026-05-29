@@ -224,7 +224,7 @@ import {
     type SisaketFutureDetailHook,
     type SisaketLandmarkPlaceholder,
     type SisaketVisualBookmark,
-} from "./visual-map/sisaketSceneConfig";
+} from "../composable/sisaketSceneConfig";
 
 const showSidebar = defineModel<boolean>("showSidebar", { default: true });
 type DistrictVisualState = {

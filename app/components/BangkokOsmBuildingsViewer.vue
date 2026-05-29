@@ -404,26 +404,26 @@ import {
   bangkokWaterStations,
   type BangkokWaterStation,
   type WaterLevelStatus,
-} from "./visual-map/bangkokWaterMock";
-import { createBangkokCloudCollection } from "./visual-map/bangkokCloudLayer";
+} from "../composable/bangkokWaterMock";
+import { createBangkokCloudCollection } from "../composable/bangkokCloudLayer";
 import {
   createBangkokFloodWaterSurface,
   syncFloodWaterSurfaceVisibility,
   type BangkokFloodWaterSurface,
-} from "./visual-map/bangkokFloodWaterSurface";
+} from "../composable/bangkokFloodWaterSurface";
 import {
   createBangkokRainSystem,
   destroyBangkokRainSystem,
   type BangkokRainSystem,
-} from "./visual-map/bangkokRainLayer";
-import { createBangkokRainHeatmapLayer, type BangkokRainHeatmapLayer } from "./visual-map/bangkokRainHeatmapLayer";
+} from "../composable/bangkokRainLayer";
+import { createBangkokRainHeatmapLayer, type BangkokRainHeatmapLayer } from "../composable/bangkokRainHeatmapLayer";
 import {
   getBangkokSunTimes,
   getDayNightPhaseLabel,
   syncBangkokDayNightLighting,
   type BangkokSunTimes,
   type DayNightPhase,
-} from "./visual-map/bangkokSunCycle";
+} from "../composable/bangkokSunCycle";
 import {
   buildStationLevelProperties,
   CLOCK_START_TIME,
@@ -439,12 +439,12 @@ import {
   RAIN_START_TIME,
   WATER_SIMULATION_DATE,
   waterSimulationClock,
-} from "./visual-map/bangkokWaterTimeSeries";
+} from "../composable/bangkokWaterTimeSeries";
 import {
   fetchBangkokRainDatasetForDate,
   getRainFrameByDateHour,
   type OpenMeteoRainDataset,
-} from "./visual-map/openMeteoRainClient";
+} from "../composable/openMeteoRainClient";
 
 type DistrictState = {
   amp_code: string;
