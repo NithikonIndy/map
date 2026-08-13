@@ -1,4 +1,5 @@
 import * as cesium from "cesium";
+import { getFloodFillAlpha, getWaterLevelColor } from "./waterLevelColor";
 
 /** ใจกลางกรุงเทพ — พื้นที่แผ่นน้ำท่วม */
 export const BANGKOK_URBAN_FLOOD_BOUNDS = {
@@ -14,23 +15,6 @@ export type BangkokFloodWaterSurface = {
   syncAtTime: (time: cesium.JulianDate) => void;
   destroy: () => void;
 };
-
-function createWaterMaterial(): cesium.Material {
-  return new cesium.Material({
-    fabric: {
-      type: "Water",
-      uniforms: {
-        baseWaterColor: new cesium.Color(0.12, 0.45, 0.82, 0.62),
-        blendColor: new cesium.Color(0, 0.65, 0.85, 0.35),
-        normalMap: cesium.buildModuleUrl("Assets/Textures/waterNormals.jpg"),
-        frequency: 900,
-        animationSpeed: 0.012,
-        amplitude: 8,
-        specularIntensity: 0.55,
-      },
-    },
-  });
-}
 
 export function createBangkokFloodWaterSurface(
   viewer: cesium.Viewer,
@@ -52,20 +36,15 @@ export function createBangkokFloodWaterSurface(
     return Math.max(0, value);
   };
 
-  const getAlphaForDepth = (depth: number): number => {
-    if (depth <= hideThreshold) {
-      return 0;
-    }
-
-    const normalized = Math.min(1, Math.max(0, depth / Math.max(maxVisualDepth, 0.01)));
-    return 0.12 + (normalized * 0.36);
-  };
-
   const rectangle = cesium.Rectangle.fromDegrees(
     BANGKOK_URBAN_FLOOD_BOUNDS.west,
     BANGKOK_URBAN_FLOOD_BOUNDS.south,
     BANGKOK_URBAN_FLOOD_BOUNDS.east,
     BANGKOK_URBAN_FLOOD_BOUNDS.north,
+  );
+
+  const materialColor = new cesium.ConstantProperty(
+    getWaterLevelColor(0, { maxLevel: maxVisualDepth, alpha: 0 }),
   );
 
   const entity = viewer.entities.add({
@@ -76,10 +55,7 @@ export function createBangkokFloodWaterSurface(
       heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
       extrudedHeight: heightProperty,
       extrudedHeightReference: cesium.HeightReference.RELATIVE_TO_GROUND,
-      material: new cesium.ColorMaterialProperty(new cesium.CallbackProperty((time) => {
-        const depth = getDepthAtTime(time ?? viewer.clock.currentTime);
-        return cesium.Color.fromCssColorString("#2563eb").withAlpha(getAlphaForDepth(depth));
-      }, false)),
+      material: new cesium.ColorMaterialProperty(materialColor),
       outline: false,
     },
     show: false,
@@ -93,6 +69,10 @@ export function createBangkokFloodWaterSurface(
     syncAtTime(time: cesium.JulianDate) {
       const depth = getDepthAtTime(time);
       entity.show = manuallyVisible && depth > hideThreshold;
+      const fillAlpha = getFloodFillAlpha(depth, hideThreshold, maxVisualDepth);
+      materialColor.setValue(
+        getWaterLevelColor(depth, { maxLevel: maxVisualDepth, alpha: fillAlpha }),
+      );
     },
     destroy() {
       viewer.entities.remove(entity);

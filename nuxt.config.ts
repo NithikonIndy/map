@@ -1,12 +1,3 @@
-import { normalizePath } from "vite";
-import { viteStaticCopy } from "vite-plugin-static-copy";
-
-const cesiumBuildDir = normalizePath(
-  decodeURIComponent(
-    new URL("./node_modules/cesium/Build/Cesium", import.meta.url).pathname,
-  ).replace(/^\/([A-Za-z]:\/)/, "$1"),
-);
-
 export default defineNuxtConfig({
   compatibilityDate: "2026-05-25",
   modules: ["@nuxt/ui"],
@@ -26,21 +17,8 @@ export default defineNuxtConfig({
 
   vite: {
     define: {
+      // Assets live in public/cesium, populated by scripts/copy-cesium-assets.mjs
       CESIUM_BASE_URL: JSON.stringify("/cesium"),
     },
-
-    plugins: [
-      viteStaticCopy({
-        targets: [
-          {
-            src: `${cesiumBuildDir}/**/*`,
-            dest: "cesium",
-            rename: {
-              stripBase: 4,
-            },
-          },
-        ],
-      }),
-    ],
   },
 });

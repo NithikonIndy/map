@@ -3,9 +3,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
-    "generate": "nuxt generate",
+    "cesium:assets": "node scripts/copy-cesium-assets.mjs",
+    "build": "node scripts/copy-cesium-assets.mjs && nuxt build",
+    "dev": "node scripts/copy-cesium-assets.mjs && nuxt dev",
+    "generate": "node scripts/copy-cesium-assets.mjs && nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "bangkok:tiles:manifest": "node scripts/bangkok-tiles/write-source-manifest.mjs",
@@ -29,8 +30,5 @@
     "unzipper": "^0.12.3",
     "vue": "^3.5.34",
     "vue-router": "^5.0.7"
-  },
-  "devDependencies": {
-    "vite-plugin-static-copy": "^4.1.0"
   }
 }

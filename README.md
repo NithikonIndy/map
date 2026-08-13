@@ -127,16 +127,33 @@ NUXT_PUBLIC_BANGKOK_PHOTOREALISTIC_TILESET_URL=
 
 ## 7) Time-lapse และ Performance
 
-สำหรับการเล่นเร็ว (`50x+`, `100x+`, `200x+`, `500x`):
-- มีการแยกงาน tick เป็น fast/slow path
-- ลดงานที่ไม่จำเป็นต่อ frame
-- ลดความถี่ sync flood visuals
-- ลด callback ที่หนักบางส่วนของ water markers/labels
+### โหมด Lite timelapse (แนะนำ)
+ในแผง “จำลองระดับน้ำตามเวลา” มีสวิตช์ **Lite timelapse** (เปิดเป็นค่าเริ่มต้น) ซึ่งทำงานอัตโนมัติเมื่อกดเล่นและความเร็ว ≥ 50×:
+- ปิดฝน particle ชั่วคราว
+- ไม่อัปเดต label บน marker ทุกรอบ (ลดงาน Cesium)
+- ลดคุณภาพ tileset (เพิ่ม `maximumScreenSpaceError`)
+- อัปเดตแสงกลางวัน/กลางคืนเฉพาะเมื่อ phase เปลี่ยน
+- ใช้ `requestRenderMode` และจำกัดเฟรมตอนเล่น (~30 fps)
+
+### แนวทางใช้งาน
+| สถานการณ์ | แนะนำ |
+|-----------|--------|
+| เล่น timeline เร็ว | เปิด Lite, เริ่มที่ 50× ก่อน |
+| RAM < 16 GB | อย่าเปิด OSM Buildings + Bangkok Custom 3D พร้อมกัน |
+| ดูฝน Open-Meteo | เลือกวัน/ชม. แล้วดูนิ่ง ๆ — ปิด heatmap ตอนเล่น timelapse |
+| หลังเล่นยาว ๆ tab > 3 GB | รีเฟรชหน้าเพื่อคืน memory |
+
+### สิ่งที่ optimize แล้วในโค้ด
+- แยก clock ของ Cesium กับ Vue UI (ไม่อัปเดต reactive ทุก tick)
+- Heatmap ใช้ canvas + entity เดียว (ไม่สร้าง imagery layer ใหม่ทุกเฟรม)
+- โหลด heatmap เมื่อเปิด layer เท่านั้น (ไม่ fetch ตอน mount)
+- reuse `ConstantProperty` สำหรับ marker/flood แทนการสร้างใหม่ซ้ำ
+- flood surface ไม่ใช้ `CallbackProperty` แล้ว
 
 ถ้ายังหน่วง:
 1. ลดความเร็ว multiplier
-2. ปิดบาง layer ที่หนัก (เช่น flood/heatmap/clouds)
-3. เช็ก hardware acceleration ของ browser
+2. ปิดบาง layer ที่หนัก (flood, heatmap, clouds, Custom 3D)
+3. เปิด hardware acceleration ใน browser
 
 ---
 
@@ -177,8 +194,8 @@ bun run bangkok:tiles:all
   - flood rectangle surface + sync visibility
 - `app/components/visual-map/openMeteoRainClient.ts`
   - ดึงและจัดข้อมูลฝนจาก Open-Meteo
-- `app/components/visual-map/bangkokRainHeatmapLayer.ts`
-  - render heatmap canvas และวางเป็น Cesium imagery layer
+- `app/composable/bangkokRainHeatmapLayer.ts`
+  - render heatmap บน canvas แล้ว overlay เป็น entity (ไม่สร้าง imagery layer ซ้ำ)
 
 ---
 

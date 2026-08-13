@@ -4,6 +4,7 @@ import { getBangkokRainBoundsRectangle } from "./openMeteoRainClient";
 export type BangkokRainHeatmapLayer = {
   setVisible: (visible: boolean) => void;
   setOpacity: (alpha: number) => void;
+  setPerformanceMode: (lite: boolean) => void;
   updateFrame: (intensityGrid: number[][]) => void;
   destroy: () => void;
 };
@@ -16,6 +17,8 @@ type HeatColorStop = {
 const DEFAULT_ALPHA = 0.82;
 const CANVAS_WIDTH = 512;
 const CANVAS_HEIGHT = 512;
+const CANVAS_WIDTH_LITE = 384;
+const CANVAS_HEIGHT_LITE = 384;
 
 const COLOR_RAMP: readonly HeatColorStop[] = [
   { stop: 0.08, color: [34, 197, 94] },
@@ -133,55 +136,111 @@ function drawHeatmap(
   context.putImageData(imageData, 0, 0);
 }
 
-async function createProviderFromCanvas(canvas: HTMLCanvasElement): Promise<cesium.SingleTileImageryProvider> {
-  const dataUrl = canvas.toDataURL("image/png");
-  return cesium.SingleTileImageryProvider.fromUrl(dataUrl, {
-    rectangle: getBangkokRainBoundsRectangle(),
-  });
+function resizeCanvas(canvas: HTMLCanvasElement, width: number, height: number): void {
+  if (canvas.width === width && canvas.height === height) {
+    return;
+  }
+
+  canvas.width = width;
+  canvas.height = height;
 }
 
-export async function createBangkokRainHeatmapLayer(
+export function createBangkokRainHeatmapLayer(
   viewer: cesium.Viewer,
   initialIntensityGrid: number[][],
   initialOpacity = DEFAULT_ALPHA,
-): Promise<BangkokRainHeatmapLayer> {
-  const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
-  const context = canvas.getContext("2d");
+): BangkokRainHeatmapLayer {
+  let canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
+  let context = canvas.getContext("2d");
   if (!context) {
     throw new Error("Unable to create 2D context for rain heatmap layer");
   }
 
   drawHeatmap(context, canvas.width, canvas.height, initialIntensityGrid);
-  let provider = await createProviderFromCanvas(canvas);
-  let layer = viewer.imageryLayers.addImageryProvider(provider);
-  layer.alpha = clamp01(initialOpacity);
-  layer.show = true;
 
-  const replaceLayer = async () => {
-    const nextProvider = await createProviderFromCanvas(canvas);
-    const nextLayer = viewer.imageryLayers.addImageryProvider(nextProvider);
-    nextLayer.alpha = layer.alpha;
-    nextLayer.show = layer.show;
-    viewer.imageryLayers.remove(layer, true);
-    provider = nextProvider;
-    layer = nextLayer;
+  const tintColor = new cesium.ConstantProperty(cesium.Color.WHITE.withAlpha(clamp01(initialOpacity)));
+  const entity = viewer.entities.add({
+    id: "bangkok-rain-heatmap",
+    rectangle: {
+      coordinates: getBangkokRainBoundsRectangle(),
+      height: 2,
+      heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
+      material: new cesium.ImageMaterialProperty({
+        image: canvas,
+        transparent: true,
+        color: tintColor,
+      }),
+    },
+    show: true,
+  });
+
+  let pendingGrid: number[][] | null = null;
+  let frameRequestId: number | null = null;
+  let performanceLite = false;
+  let lastGrid: number[][] = initialIntensityGrid;
+
+  const flushPendingFrame = () => {
+    frameRequestId = null;
+    if (!pendingGrid || !context) {
+      return;
+    }
+
+    drawHeatmap(context, canvas.width, canvas.height, pendingGrid);
+    lastGrid = pendingGrid;
+    pendingGrid = null;
+    viewer.scene.requestRender();
+  };
+
+  const scheduleFrameFlush = () => {
+    if (frameRequestId !== null) {
+      return;
+    }
+
+    frameRequestId = requestAnimationFrame(flushPendingFrame);
+  };
+
+  const applyPerformanceCanvasSize = () => {
+    const nextWidth = performanceLite ? CANVAS_WIDTH_LITE : CANVAS_WIDTH;
+    const nextHeight = performanceLite ? CANVAS_HEIGHT_LITE : CANVAS_HEIGHT;
+    resizeCanvas(canvas, nextWidth, nextHeight);
+    context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Unable to recreate 2D context for rain heatmap layer");
+    }
+
+    drawHeatmap(context, canvas.width, canvas.height, lastGrid);
+    viewer.scene.requestRender();
   };
 
   return {
     setVisible(visible: boolean) {
-      layer.show = visible;
+      entity.show = visible;
+      viewer.scene.requestRender();
     },
     setOpacity(alpha: number) {
-      layer.alpha = clamp01(alpha);
+      tintColor.setValue(cesium.Color.WHITE.withAlpha(clamp01(alpha)));
+      viewer.scene.requestRender();
+    },
+    setPerformanceMode(lite: boolean) {
+      if (performanceLite === lite) {
+        return;
+      }
+
+      performanceLite = lite;
+      applyPerformanceCanvasSize();
     },
     updateFrame(intensityGrid: number[][]) {
-      drawHeatmap(context, canvas.width, canvas.height, intensityGrid);
-      replaceLayer().catch((error: unknown) => {
-        console.error("Failed to refresh rain heatmap layer", error);
-      });
+      pendingGrid = intensityGrid;
+      scheduleFrameFlush();
     },
     destroy() {
-      viewer.imageryLayers.remove(layer, true);
+      if (frameRequestId !== null) {
+        cancelAnimationFrame(frameRequestId);
+      }
+
+      viewer.entities.remove(entity);
+      canvas = createCanvas(0, 0);
+      context = null;
     },
   };
 }

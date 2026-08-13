@@ -2,13 +2,8 @@
   <div class="viewer-shell">
     <div ref="container" class="cesium-container" />
 
-    <button
-      v-if="!showHeaderPanel"
-      type="button"
-      class="scene-header-tab"
-      aria-label="เปิดแผงข้อมูล"
-      @click="showHeaderPanel = true"
-    >
+    <button v-if="!showHeaderPanel" type="button" class="scene-header-tab" aria-label="เปิดแผงข้อมูล"
+      @click="showHeaderPanel = true">
       แผงข้อมูล
     </button>
 
@@ -17,19 +12,15 @@
         <p class="eyebrow scene-header-eyebrow">
           Bangkok OSM Demo
         </p>
-        <button
-          type="button"
-          class="panel-close-button"
-          aria-label="ปิดแผงข้อมูล"
-          @click="showHeaderPanel = false"
-        >
+        <button type="button" class="panel-close-button" aria-label="ปิดแผงข้อมูล" @click="showHeaderPanel = false">
           ปิด
         </button>
       </div>
       <h1 class="title">กรุงเทพมหานคร</h1>
       <p class="description">
         เดโมกรุงเทพบน satellite imagery สำหรับดู OSM Buildings แบบเมืองหนาแน่น
-        พร้อมจำลองระดับน้ำตามเวลา 24 ชม. (ฝน 12:00–16:00 น.) แสงกลางวัน–กลางคืนตามพระอาทิตย์ขึ้น/ตกจริง และชั้น Bangkok Custom 3D
+        พร้อมจำลองระดับน้ำตามเวลา 24 ชม. (ฝน 12:00–16:00 น.) แสงกลางวัน–กลางคืนตามพระอาทิตย์ขึ้น/ตกจริง และชั้น Bangkok
+        Custom 3D
       </p>
 
       <div class="status-row">
@@ -58,108 +49,60 @@
         <h2>Layers</h2>
 
         <label class="toggle-row">
-          <input
-            v-model="layerVisibility.province"
-            type="checkbox"
-            @change="handleLayerToggle('province')"
-          >
+          <input v-model="layerVisibility.province" type="checkbox" @change="handleLayerToggle('province')">
           <span>ขอบเขตกรุงเทพ</span>
         </label>
 
         <label class="toggle-row">
-          <input
-            v-model="layerVisibility.districts"
-            type="checkbox"
-            @change="handleLayerToggle('districts')"
-          >
+          <input v-model="layerVisibility.districts" type="checkbox" @change="handleLayerToggle('districts')">
           <span>ขอบเขตเขต</span>
         </label>
 
         <label class="toggle-row" :class="{ 'is-disabled': !hasIonToken }">
-          <input
-            v-model="layerVisibility.buildings"
-            type="checkbox"
-            :disabled="!hasIonToken || buildingsLoading"
-            @change="handleLayerToggle('buildings')"
-          >
+          <input v-model="layerVisibility.buildings" type="checkbox" :disabled="!hasIonToken || buildingsLoading"
+            @change="handleLayerToggle('buildings')">
           <span>3D context layer (OSM Buildings)</span>
         </label>
 
         <label class="toggle-row" :class="{ 'is-disabled': photorealisticLoading || !hasPhotorealisticSource }">
-          <input
-            v-model="layerVisibility.photorealistic"
-            type="checkbox"
-            :disabled="photorealisticLoading || !hasPhotorealisticSource"
-            @change="handleLayerToggle('photorealistic')"
-          >
+          <input v-model="layerVisibility.photorealistic" type="checkbox"
+            :disabled="photorealisticLoading || !hasPhotorealisticSource" @change="handleLayerToggle('photorealistic')">
           <span>Bangkok Custom 3D</span>
         </label>
 
-        <label
-          v-if="hasPhotorealisticSource"
-          class="toggle-row toggle-row-nested"
-          :class="{ 'is-disabled': !layerVisibility.photorealistic }"
-        >
-          <input
-            v-model="compareWithOsm"
-            type="checkbox"
-            :disabled="!layerVisibility.photorealistic"
-            @change="handleCompareModeChange"
-          >
+        <label v-if="hasPhotorealisticSource" class="toggle-row toggle-row-nested"
+          :class="{ 'is-disabled': !layerVisibility.photorealistic }">
+          <input v-model="compareWithOsm" type="checkbox" :disabled="!layerVisibility.photorealistic"
+            @change="handleCompareModeChange">
           <span>เปรียบเทียบกับ OSM (เปิด Custom แล้วซ่อน OSM)</span>
         </label>
 
         <label class="toggle-row">
-          <input
-            v-model="layerVisibility.water"
-            type="checkbox"
-            @change="handleLayerToggle('water')"
-          >
+          <input v-model="layerVisibility.water" type="checkbox" @change="handleLayerToggle('water')">
           <span>Water markers</span>
         </label>
 
         <label class="toggle-row">
-          <input
-            v-model="layerVisibility.flood"
-            type="checkbox"
-            @change="handleLayerToggle('flood')"
-          >
+          <input v-model="layerVisibility.flood" type="checkbox" @change="handleLayerToggle('flood')">
           <span>แผ่นน้ำท่วม (จำลอง)</span>
         </label>
 
         <label class="toggle-row">
-          <input
-            v-model="layerVisibility.rain"
-            type="checkbox"
-            @change="handleLayerToggle('rain')"
-          >
+          <input v-model="layerVisibility.rain" type="checkbox" @change="handleLayerToggle('rain')">
           <span>ฝนตก (จำลอง)</span>
         </label>
 
         <label class="toggle-row">
-          <input
-            v-model="layerVisibility.rainHeatmap"
-            type="checkbox"
-            :disabled="rainHeatmapLoading"
-            @change="handleLayerToggle('rainHeatmap')"
-          >
+          <input v-model="layerVisibility.rainHeatmap" type="checkbox" :disabled="rainHeatmapLoading"
+            @change="handleLayerToggle('rainHeatmap')">
           <span>Rainfall Heatmap (Open-Meteo)</span>
         </label>
 
-        <label
-          class="toggle-row toggle-row-nested"
-          :class="{ 'is-disabled': !layerVisibility.rainHeatmap || rainHeatmapLoading }"
-        >
+        <label class="toggle-row toggle-row-nested"
+          :class="{ 'is-disabled': !layerVisibility.rainHeatmap || rainHeatmapLoading }">
           <span>ความเข้ม Heatmap</span>
-          <input
-            v-model.number="rainHeatmapOpacity"
-            type="range"
-            min="0.15"
-            max="0.95"
-            step="0.01"
-            :disabled="!layerVisibility.rainHeatmap || rainHeatmapLoading"
-            @input="syncLayerVisibility"
-          >
+          <input v-model.number="rainHeatmapOpacity" type="range" min="0.15" max="0.95" step="0.01"
+            :disabled="!layerVisibility.rainHeatmap || rainHeatmapLoading" @input="syncLayerVisibility">
         </label>
 
         <p class="panel-note">
@@ -169,12 +112,7 @@
         <div class="date-range-grid">
           <div class="date-field">
             <span>เลือกวันที่</span>
-            <UInput
-              id="heatmap-date"
-              v-model="selectedHeatmapDate"
-              type="date"
-              @change="handleHeatmapDateChange"
-            />
+            <UInput id="heatmap-date" v-model="selectedHeatmapDate" type="date" @change="handleHeatmapDateChange" />
           </div>
           <div class="date-field">
             <span>เลือกชั่วโมง</span>
@@ -187,11 +125,7 @@
         </div>
 
         <label class="toggle-row">
-          <input
-            v-model="layerVisibility.clouds"
-            type="checkbox"
-            @change="handleLayerToggle('clouds')"
-          >
+          <input v-model="layerVisibility.clouds" type="checkbox" @change="handleLayerToggle('clouds')">
           <span>เมฆ (Cumulus)</span>
         </label>
 
@@ -199,7 +133,8 @@
           {{ layerHelpText }}
         </p>
         <p class="panel-note">
-          {{ rainHeatmapStatusLabel }} · {{ selectedHeatmapDate }} {{ selectedHeatmapHourLabel }} · แหล่งข้อมูล {{ rainHeatmapSourceLabel }} · ค่าสูงสุด {{ rainHeatmapMaxLabel }}
+          {{ rainHeatmapStatusLabel }} · {{ selectedHeatmapDate }} {{ selectedHeatmapHourLabel }} · แหล่งข้อมูล {{
+          rainHeatmapSourceLabel }} · ค่าสูงสุด {{ rainHeatmapMaxLabel }}
         </p>
       </section>
 
@@ -214,11 +149,7 @@
             <strong>ใจกลางเมือง</strong>
             <span>มุมเฉียง close-up ให้เห็น OSM Buildings ชัดที่สุด</span>
           </button>
-          <button
-            v-if="hasPhotorealisticSource"
-            class="bookmark-button"
-            @click="focusCustomTiles()"
-          >
+          <button v-if="hasPhotorealisticSource" class="bookmark-button" @click="focusCustomTiles()">
             <strong>ดู Custom 3D</strong>
             <span>ซูมเข้า extruded buildings จาก tileset ที่ตั้งค่าไว้</span>
           </button>
@@ -232,7 +163,8 @@
       <section class="panel-section">
         <h2>จำลองระดับน้ำตามเวลา</h2>
         <p class="panel-note">
-          ช่วงฝน {{ RAIN_START_TIME }}–{{ RAIN_END_TIME }} น. — ฝนตกและน้ำท่วมใจกลางเมืองขึ้นอัตโนมัติ (เปิด layer ฝน/น้ำท่วม)
+          ช่วงฝน {{ RAIN_START_TIME }}–{{ RAIN_END_TIME }} น. — ฝนตกและน้ำท่วมใจกลางเมืองขึ้นอัตโนมัติ (เปิด layer
+          ฝน/น้ำท่วม)
         </p>
         <div class="time-display-row">
           <strong class="time-label">{{ simulationTimeLabel }} น.</strong>
@@ -243,15 +175,8 @@
         <p class="panel-note sun-times-note">
           พระอาทิตย์ขึ้น {{ bangkokSunTimes.sunriseLabel }} น. · ตก {{ bangkokSunTimes.sunsetLabel }} น.
         </p>
-        <input
-          class="time-slider"
-          type="range"
-          min="0"
-          max="1000"
-          step="1"
-          :value="Math.round(simulationProgress * 1000)"
-          @input="onSimulationSliderInput"
-        >
+        <input class="time-slider" type="range" min="0" max="1000" step="1"
+          :value="Math.round(simulationProgress * 1000)" @input="onSimulationSliderInput">
         <div class="time-range-labels">
           <span>{{ CLOCK_START_TIME }}</span>
           <span>{{ CLOCK_STOP_TIME }}</span>
@@ -263,21 +188,25 @@
           <label class="speed-select">
             <span>ความเร็ว</span>
             <select v-model.number="clockMultiplier" @change="applyClockMultiplier">
+              <option :value="10">
+                10×
+              </option>
+              <option :value="25">
+                25×
+              </option>
               <option :value="50">
                 50×
-              </option>
-              <option :value="100">
-                100×
-              </option>
-              <option :value="200">
-                200×
-              </option>
-              <option :value="500">
-                500×
               </option>
             </select>
           </label>
         </div>
+        <label class="toggle-row toggle-row-nested">
+          <input v-model="liteTimelapseEnabled" type="checkbox" @change="onLiteTimelapseToggle">
+          <span>Lite timelapse (แนะนำ)</span>
+        </label>
+        <p v-if="isLiteTimelapseActive" class="panel-note">
+          โหมด Lite เปิดอยู่ — ปิดฝน/label เพื่อความลื่น
+        </p>
       </section>
 
       <section class="panel-section">
@@ -301,12 +230,8 @@
       <section class="panel-section">
         <h2>Water Stations</h2>
         <ul class="station-list">
-          <li
-            v-for="station in waterStationsAtCurrentTime"
-            :key="station.id"
-            class="station-item"
-            :class="{ 'is-active': activeWaterStation?.id === station.id }"
-          >
+          <li v-for="station in waterStationSnapshots" :key="station.id" class="station-item"
+            :class="{ 'is-active': activeWaterStation?.id === station.id }">
             <button class="station-button" @click="focusWaterStationById(station.id)">
               <div class="station-row">
                 <strong>{{ station.label }}</strong>
@@ -390,7 +315,8 @@
 
       <p class="source-note">
         ข้อมูลขอบเขต: OpenGISData-Thailand, ภาพพื้นหลัง: ArcGIS World Imagery,
-        อาคาร 3D: Cesium OSM Buildings, Custom 3D: extruded tileset ตาม URL ที่ตั้งค่าไว้ (ไม่ใช่ Google Photorealistic),
+        อาคาร 3D: Cesium OSM Buildings, Custom 3D: extruded tileset ตาม URL ที่ตั้งค่าไว้ (ไม่ใช่ Google
+        Photorealistic),
         ข้อมูลน้ำ: mock design
       </p>
     </aside>
@@ -419,6 +345,7 @@ import {
 import { createBangkokRainHeatmapLayer, type BangkokRainHeatmapLayer } from "../composable/bangkokRainHeatmapLayer";
 import {
   getBangkokSunTimes,
+  getDayNightPhase,
   getDayNightPhaseLabel,
   syncBangkokDayNightLighting,
   type BangkokSunTimes,
@@ -445,6 +372,7 @@ import {
   getRainFrameByDateHour,
   type OpenMeteoRainDataset,
 } from "../composable/openMeteoRainClient";
+import { getFloodFillAlpha, getWaterLevelColor, getWaterMarkerColor } from "../composable/waterLevelColor";
 
 type DistrictState = {
   amp_code: string;
@@ -463,6 +391,18 @@ type LayerKey =
   | "rain"
   | "rainHeatmap"
   | "clouds";
+
+type WaterStationSnapshot = BangkokWaterStation & {
+  status: WaterLevelStatus;
+  districtName: string;
+  updatedAt: string;
+};
+
+type WaterStationVisualBinding = {
+  colorProp: cesium.ConstantProperty;
+  labelProp: cesium.ConstantProperty;
+  lineColorProp: cesium.ConstantProperty;
+};
 
 const props = withDefaults(defineProps<{
   showSidebar?: boolean;
@@ -512,10 +452,12 @@ const context3dReady = ref(false);
 const photorealisticReady = ref(false);
 const compareWithOsm = ref(true);
 const clockPlaying = ref(false);
-const clockMultiplier = ref(50);
+const clockMultiplier = ref(10);
+const liteTimelapseEnabled = ref(true);
 const simulationProgress = ref(0);
 const isRainPeriodNow = ref(false);
 const simulationTime = ref(cesium.JulianDate.clone(waterSimulationClock.start));
+const waterStationSnapshots = ref<WaterStationSnapshot[]>([]);
 const rainHeatmapOpacity = ref(0.82);
 const rainHeatmapLoading = ref(false);
 const rainHeatmapError = ref("");
@@ -550,6 +492,13 @@ const floodMaxVisualDepth = 2.5;
 const TIMELAPSE_SLOW_SYNC_INTERVAL_MS = 180;
 const TIMELAPSE_FAST_MULTIPLIER_THRESHOLD = 300;
 const WATER_MARKER_SYNC_INTERVAL_MS = 220;
+const LITE_TIMELAPSE_MULTIPLIER_THRESHOLD = 50;
+const OSM_SSE_NORMAL = 1;
+const OSM_SSE_LITE = 4;
+const CUSTOM_SSE_NORMAL = 0.5;
+const CUSTOM_SSE_LITE = 3;
+const TARGET_FRAME_RATE_PLAYING = 30;
+const TARGET_FRAME_RATE_IDLE = 60;
 
 let stationLevelProperties = new Map<string, cesium.SampledProperty>();
 let floodLevelProperty: cesium.SampledProperty | null = null;
@@ -574,6 +523,10 @@ let lastSlowSyncAtMs = 0;
 let lastFloodDepthBucket = -1;
 let lastFloodZoneVisible: boolean | null = null;
 let lastWaterStationVisualSyncAtMs = 0;
+let lastDayNightPhase: DayNightPhase | null = null;
+let sceneClockTime = cesium.JulianDate.clone(waterSimulationClock.start);
+let floodZoneFillColor: cesium.ConstantProperty | null = null;
+let floodZoneFillMaterial: cesium.ColorMaterialProperty | null = null;
 let fogStateBeforeClouds: {
   enabled: boolean;
   density: number;
@@ -582,6 +535,7 @@ let fogStateBeforeClouds: {
 
 const districtEntities = new Map<string, cesium.Entity>();
 const waterStationEntities = new Map<string, cesium.Entity>();
+const waterStationVisualBindings = new Map<string, WaterStationVisualBinding>();
 
 const waterStationCount = bangkokWaterStations.length;
 
@@ -597,39 +551,30 @@ const hoveredDistrict = computed(() => {
   return districtStates[hoveredDistrictCode.value] ?? null;
 });
 
+const isLiteTimelapseActive = computed(() => (
+  liteTimelapseEnabled.value
+  && clockPlaying.value
+  && clockMultiplier.value >= LITE_TIMELAPSE_MULTIPLIER_THRESHOLD
+));
+
 const simulationTimeLabel = computed(() => formatSimulationClockTime(simulationTime.value));
 const dayNightPhaseLabel = computed(() => getDayNightPhaseLabel(dayNightPhase.value));
 const selectedHeatmapHourLabel = computed(() => `${String(selectedHeatmapHour.value).padStart(2, "0")}:00`);
 
-const waterStationsAtCurrentTime = computed(() => bangkokWaterStations.map((station) => {
-  const levelProperty = stationLevelProperties.get(station.id);
-  const levelMeters = levelProperty
-    ? getLevelAtTime(levelProperty, simulationTime.value, station.levelMeters)
-    : station.levelMeters;
-
-  return {
-    ...station,
-    levelMeters,
-    status: levelToStatus(levelMeters),
-    districtName: districtStates[station.districtCode]?.amp_th ?? station.districtCode,
-    updatedAt: `${WATER_SIMULATION_DATE} ${simulationTimeLabel.value}`,
-  };
-}));
-
 const activeWaterStation = computed(() => (
   activeWaterStationId.value
-    ? waterStationsAtCurrentTime.value.find((station) => station.id === activeWaterStationId.value) ?? null
+    ? waterStationSnapshots.value.find((station) => station.id === activeWaterStationId.value) ?? null
     : null
 ));
 
 const alertStationCount = computed(() => (
-  waterStationsAtCurrentTime.value.filter(
+  waterStationSnapshots.value.filter(
     (station) => station.status === "warning" || station.status === "critical",
   ).length
 ));
 
 const highestWaterStation = computed(() => (
-  waterStationsAtCurrentTime.value.reduce<BangkokWaterStation | null>((highest, station) => {
+  waterStationSnapshots.value.reduce<BangkokWaterStation | null>((highest, station) => {
     if (!highest || station.levelMeters > highest.levelMeters) {
       return station;
     }
@@ -803,6 +748,85 @@ function getFloodDepthAtTime(time: cesium.JulianDate): number {
   return Math.max(0, value);
 }
 
+function requestSceneRender(): void {
+  viewer?.scene.requestRender();
+}
+
+function getSceneTime(): cesium.JulianDate {
+  return viewer?.clock.currentTime ?? sceneClockTime;
+}
+
+function refreshWaterStationsUiState(time: cesium.JulianDate): void {
+  const timeLabel = formatSimulationClockTime(time);
+  waterStationSnapshots.value = bangkokWaterStations.map((station) => {
+    const levelMeters = getStationLevelForTime(station, time);
+
+    return {
+      ...station,
+      levelMeters,
+      status: levelToStatus(levelMeters),
+      districtName: districtStates[station.districtCode]?.amp_th ?? station.districtCode,
+      updatedAt: `${WATER_SIMULATION_DATE} ${timeLabel}`,
+    };
+  });
+}
+
+function pushSimulationStateToUi(time: cesium.JulianDate): void {
+  sceneClockTime = cesium.JulianDate.clone(time);
+  simulationTime.value = cesium.JulianDate.clone(time);
+  simulationProgress.value = getSimulationProgress(time);
+  isRainPeriodNow.value = isRainPeriod(time);
+  refreshWaterStationsUiState(time);
+}
+
+function applyTimelapsePerformanceProfile(): void {
+  const lite = isLiteTimelapseActive.value;
+  rainSystem?.setPerformanceMode(lite);
+  rainHeatmapLayer?.setPerformanceMode(lite);
+
+  if (osmBuildingsTileset) {
+    osmBuildingsTileset.maximumScreenSpaceError = lite ? OSM_SSE_LITE : OSM_SSE_NORMAL;
+  }
+
+  if (photorealisticTileset) {
+    photorealisticTileset.maximumScreenSpaceError = lite ? CUSTOM_SSE_LITE : CUSTOM_SSE_NORMAL;
+  }
+
+  requestSceneRender();
+}
+
+function syncPlaybackRenderMode(): void {
+  if (!viewer) {
+    return;
+  }
+
+  viewer.targetFrameRate = clockPlaying.value
+    ? TARGET_FRAME_RATE_PLAYING
+    : TARGET_FRAME_RATE_IDLE;
+  requestSceneRender();
+}
+
+function syncDayNightLightingIfNeeded(time: cesium.JulianDate, force = false): void {
+  if (!viewer) {
+    return;
+  }
+
+  const nextPhase = getDayNightPhase(time, bangkokSunTimes);
+  if (!force && lastDayNightPhase === nextPhase) {
+    return;
+  }
+
+  lastDayNightPhase = nextPhase;
+  dayNightPhase.value = syncBangkokDayNightLighting(viewer, time, bangkokSunTimes, {
+    cloudsLayerEnabled: layerVisibility.clouds,
+  });
+}
+
+function onLiteTimelapseToggle(): void {
+  applyTimelapsePerformanceProfile();
+  requestSceneRender();
+}
+
 function getFloodDepthBucket(time: cesium.JulianDate): number {
   const depth = getFloodDepthAtTime(time);
   if (depth <= floodHideThreshold) {
@@ -830,21 +854,20 @@ function syncFloodZoneDepthVisibility(time: cesium.JulianDate, force = false): v
     return;
   }
 
-  const bucketAlpha = depthBucket <= 0
-    ? 0
-    : 0.12 + ((depthBucket / 10) * 0.38);
-  const bucketColor = cesium.Color.fromCssColorString("#0ea5e9").withAlpha(bucketAlpha);
+  if (shouldUpdateMaterial && floodZoneFillColor) {
+    const depth = getFloodDepthAtTime(time);
+    const fillAlpha = getFloodFillAlpha(depth, floodHideThreshold, floodMaxVisualDepth);
+    floodZoneFillColor.setValue(
+      getWaterLevelColor(depth, { maxLevel: floodMaxVisualDepth, alpha: fillAlpha }),
+    );
+  }
 
-  for (const entity of floodDataSource.entities.values) {
-    if (!entity.polygon) {
-      continue;
-    }
+  if (shouldUpdateVisibility) {
+    for (const entity of floodDataSource.entities.values) {
+      if (!entity.polygon) {
+        continue;
+      }
 
-    if (shouldUpdateMaterial) {
-      entity.polygon.material = new cesium.ColorMaterialProperty(bucketColor);
-    }
-
-    if (shouldUpdateVisibility) {
       entity.show = nextVisible;
     }
   }
@@ -904,19 +927,6 @@ function waterStatusLabel(status: WaterLevelStatus) {
   }
 }
 
-function getWaterStatusColor(status: WaterLevelStatus) {
-  switch (status) {
-    case "critical":
-      return cesium.Color.fromCssColorString("#ef4444");
-    case "warning":
-      return cesium.Color.fromCssColorString("#f97316");
-    case "watch":
-      return cesium.Color.fromCssColorString("#f59e0b");
-    default:
-      return cesium.Color.fromCssColorString("#22c55e");
-  }
-}
-
 function getStationLevelForTime(station: BangkokWaterStation, time: cesium.JulianDate): number {
   const levelProperty = stationLevelProperties.get(station.id);
   return levelProperty
@@ -935,18 +945,21 @@ function syncWaterStationVisuals(time: cesium.JulianDate, force = false): void {
   }
 
   lastWaterStationVisualSyncAtMs = nowMs;
+  const skipLabelUpdates = isLiteTimelapseActive.value;
 
   for (const station of bangkokWaterStations) {
-    const entity = waterStationEntities.get(station.id);
-    if (!entity?.point || !entity.polyline || !entity.label) {
+    const binding = waterStationVisualBindings.get(station.id);
+    if (!binding) {
       continue;
     }
 
     const level = getStationLevelForTime(station, time);
-    const statusColor = getWaterStatusColor(levelToStatus(level));
-    entity.point.color = new cesium.ConstantProperty(statusColor);
-    entity.polyline.material = new cesium.ColorMaterialProperty(statusColor.withAlpha(0.75));
-    entity.label.text = new cesium.ConstantProperty(`${station.label}\n${level.toFixed(2)} ม.`);
+    binding.colorProp.setValue(getWaterMarkerColor(level));
+    binding.lineColorProp.setValue(getWaterMarkerColor(level, 0.75));
+
+    if (!skipLabelUpdates) {
+      binding.labelProp.setValue(`${station.label}\n${level.toFixed(2)} ม.`);
+    }
   }
 }
 
@@ -1024,7 +1037,9 @@ function applyOsmBuildingStyle(stacked = isOsmStackedWithCustom()) {
     return;
   }
 
-  osmBuildingsTileset.maximumScreenSpaceError = 1;
+  osmBuildingsTileset.maximumScreenSpaceError = isLiteTimelapseActive.value
+    ? OSM_SSE_LITE
+    : OSM_SSE_NORMAL;
   osmBuildingsTileset.dynamicScreenSpaceError = true;
   setOsmOutlineVisible(!stacked);
 
@@ -1057,7 +1072,9 @@ function applyCustomTilesetStyle() {
     return;
   }
 
-  photorealisticTileset.maximumScreenSpaceError = 0.5;
+  photorealisticTileset.maximumScreenSpaceError = isLiteTimelapseActive.value
+    ? CUSTOM_SSE_LITE
+    : CUSTOM_SSE_NORMAL;
   photorealisticTileset.dynamicScreenSpaceError = true;
   photorealisticTileset.style = new cesium.Cesium3DTileStyle({
     color: "color('#f59e0b', 0.92)",
@@ -1116,14 +1133,16 @@ function createWaterStationMarkers() {
 
   for (const station of bangkokWaterStations) {
     const initialLevel = getStationLevelForTime(station, simulationTime.value);
-    const initialStatusColor = getWaterStatusColor(levelToStatus(initialLevel));
+    const colorProp = new cesium.ConstantProperty(getWaterMarkerColor(initialLevel));
+    const lineColorProp = new cesium.ConstantProperty(getWaterMarkerColor(initialLevel, 0.75));
+    const labelProp = new cesium.ConstantProperty(`${station.label}\n${initialLevel.toFixed(2)} ม.`);
 
     const entity = viewer.entities.add({
       id: `water-${station.id}`,
       position: cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 35),
       point: {
         pixelSize: 14,
-        color: initialStatusColor,
+        color: colorProp,
         outlineColor: cesium.Color.WHITE.withAlpha(0.96),
         outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -1134,12 +1153,10 @@ function createWaterStationMarkers() {
           cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 28),
         ],
         width: 3,
-        material: new cesium.ColorMaterialProperty(
-          initialStatusColor.withAlpha(0.75),
-        ),
+        material: new cesium.ColorMaterialProperty(lineColorProp),
       },
       label: {
-        text: `${station.label}\n${initialLevel.toFixed(2)} ม.`,
+        text: labelProp,
         font: "600 12px sans-serif",
         style: cesium.LabelStyle.FILL_AND_OUTLINE,
         fillColor: cesium.Color.WHITE,
@@ -1159,8 +1176,14 @@ function createWaterStationMarkers() {
 
     entity.show = layerVisibility.water;
     waterStationEntities.set(station.id, entity);
+    waterStationVisualBindings.set(station.id, {
+      colorProp,
+      labelProp,
+      lineColorProp,
+    });
   }
 
+  refreshWaterStationsUiState(simulationTime.value);
   syncWaterStationVisuals(simulationTime.value, true);
 }
 
@@ -1244,11 +1267,12 @@ async function setupRainHeatmapLayer() {
       throw new Error("Open-Meteo did not return any rainfall frame");
     }
 
-    rainHeatmapLayer = await createBangkokRainHeatmapLayer(
+    rainHeatmapLayer = createBangkokRainHeatmapLayer(
       viewer,
       initialFrame.intensityGrid,
       rainHeatmapOpacity.value,
     );
+    rainHeatmapLayer.setPerformanceMode(isLiteTimelapseActive.value);
     rainHeatmapLayer.setVisible(layerVisibility.rainHeatmap);
     rainHeatmapMaxLabel.value = `${initialFrame.maxPrecipitationMmPerHour.toFixed(1)} mm/h`;
     rainHeatmapSourceLabel.value = mapRainSourceLabel(initialFrame.source);
@@ -1298,15 +1322,17 @@ function syncRainHeatmapToSimulation(force = false) {
   lastRainHeatmapTimestampIso = frame.timestampIso;
 }
 
-function syncRainAndFloodEffects() {
-  const rainVisible = layerVisibility.rain && isRainPeriodNow.value;
+function syncRainAndFloodEffects(time = getSceneTime()) {
+  rainSystem?.setPerformanceMode(isLiteTimelapseActive.value);
+  const rainVisible = layerVisibility.rain && isRainPeriod(time) && !isLiteTimelapseActive.value;
   rainSystem?.setVisible(rainVisible);
   rainHeatmapLayer?.setVisible(layerVisibility.rainHeatmap);
   rainHeatmapLayer?.setOpacity(rainHeatmapOpacity.value);
   syncRainHeatmapToSimulation();
   syncFloodWaterSurfaceVisibility(floodWaterSurface, layerVisibility.flood);
-  floodWaterSurface?.syncAtTime(simulationTime.value);
-  syncFloodZoneDepthVisibility(simulationTime.value);
+  floodWaterSurface?.syncAtTime(time);
+  syncFloodZoneDepthVisibility(time);
+  requestSceneRender();
 }
 
 function setupWaterSimulationClock() {
@@ -1334,9 +1360,13 @@ function syncSimulationUiFromClock(forceSlowPath = false) {
   }
 
   const time = viewer.clock.currentTime;
-  simulationTime.value = cesium.JulianDate.clone(time);
-  simulationProgress.value = getSimulationProgress(time);
-  isRainPeriodNow.value = isRainPeriod(time);
+  sceneClockTime = cesium.JulianDate.clone(time);
+
+  const rainNow = isRainPeriod(time);
+  if (isRainPeriodNow.value !== rainNow) {
+    isRainPeriodNow.value = rainNow;
+    requestSceneRender();
+  }
 
   const nowMs = Date.now();
   const interval = viewer.clock.multiplier >= TIMELAPSE_FAST_MULTIPLIER_THRESHOLD
@@ -1349,12 +1379,12 @@ function syncSimulationUiFromClock(forceSlowPath = false) {
   }
 
   lastSlowSyncAtMs = nowMs;
+  pushSimulationStateToUi(time);
+  applyTimelapsePerformanceProfile();
   syncCloudFog();
-  dayNightPhase.value = syncBangkokDayNightLighting(viewer, time, bangkokSunTimes, {
-    cloudsLayerEnabled: layerVisibility.clouds,
-  });
-  syncWaterStationVisuals(time);
-  syncRainAndFloodEffects();
+  syncDayNightLightingIfNeeded(time, forceSlowPath);
+  syncWaterStationVisuals(time, forceSlowPath);
+  syncRainAndFloodEffects(time);
 }
 
 function toggleClockPlayback() {
@@ -1364,6 +1394,16 @@ function toggleClockPlayback() {
 
   clockPlaying.value = !clockPlaying.value;
   viewer.clock.shouldAnimate = clockPlaying.value;
+  applyTimelapsePerformanceProfile();
+  syncPlaybackRenderMode();
+
+  if (!clockPlaying.value) {
+    pushSimulationStateToUi(viewer.clock.currentTime);
+    syncWaterStationVisuals(viewer.clock.currentTime, true);
+    syncRainAndFloodEffects(viewer.clock.currentTime);
+  }
+
+  requestSceneRender();
 }
 
 function applyClockMultiplier() {
@@ -1372,6 +1412,8 @@ function applyClockMultiplier() {
   }
 
   viewer.clock.multiplier = clockMultiplier.value;
+  applyTimelapsePerformanceProfile();
+  requestSceneRender();
 }
 
 function onSimulationSliderInput(event: Event) {
@@ -1385,6 +1427,7 @@ function onSimulationSliderInput(event: Event) {
   viewer.clock.shouldAnimate = false;
   viewer.clock.currentTime = progressToSimulationTime(progress);
   syncSimulationUiFromClock(true);
+  requestSceneRender();
 }
 
 async function createFloodZones() {
@@ -1398,6 +1441,11 @@ async function createFloodZones() {
 
   await viewer.dataSources.add(floodDataSource);
 
+  floodZoneFillColor = new cesium.ConstantProperty(
+    getWaterLevelColor(0, { maxLevel: floodMaxVisualDepth, alpha: 0 }),
+  );
+  floodZoneFillMaterial = new cesium.ColorMaterialProperty(floodZoneFillColor);
+
   for (const entity of floodDataSource.entities.values) {
     if (!entity.polygon) {
       continue;
@@ -1405,9 +1453,7 @@ async function createFloodZones() {
 
     entity.polygon.height = new cesium.ConstantProperty(0);
     entity.polygon.extrudedHeight = floodLevelProperty;
-    entity.polygon.material = new cesium.ColorMaterialProperty(
-      cesium.Color.fromCssColorString("#0ea5e9").withAlpha(0),
-    );
+    entity.polygon.material = floodZoneFillMaterial;
     entity.polygon.outline = new cesium.ConstantProperty(false);
 
     if (terrainEnabled.value) {
@@ -1465,6 +1511,7 @@ function syncLayerVisibility() {
   }
 
   syncSimulationUiFromClock();
+  requestSceneRender();
 
   syncBuildingLayerPresentation();
   syncAllDistrictStyles();
@@ -1839,6 +1886,8 @@ onMounted(async () => {
     }
 
     viewer = new cesium.Viewer(container.value, viewerOptions);
+    viewer.scene.requestRenderMode = true;
+    viewer.targetFrameRate = TARGET_FRAME_RATE_IDLE;
     viewer.scene.globe.enableLighting = true;
     viewer.scene.globe.depthTestAgainstTerrain = terrainEnabled.value;
     viewer.scene.globe.showGroundAtmosphere = true;
@@ -1886,8 +1935,8 @@ onMounted(async () => {
     setupWaterSimulationClock();
     setupCloudLayer();
     setupRainAndFloodEffects();
-    await setupRainHeatmapLayer();
     createWaterStationMarkers();
+    refreshWaterStationsUiState(simulationTime.value);
     await createFloodZones();
 
     districtCount.value = districtEntities.size;
@@ -2208,7 +2257,7 @@ onBeforeUnmount(() => {
   color: #f8fafc;
 }
 
-.panel-section + .panel-section {
+.panel-section+.panel-section {
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -2463,6 +2512,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
+
   .scene-header,
   .control-panel {
     position: absolute;
